@@ -7,7 +7,8 @@ const HERO_IMAGE =
 
 export default function Hero() {
   const { settings } = useSiteSettings()
-  const bg = settings.hero_bg_url || HERO_IMAGE
+  const rawBg = settings.hero_bg_url || HERO_IMAGE
+  const bg = rawBg.includes('?') ? rawBg : `${rawBg}?v=${settings.updated_at || Date.now()}`
 
   return (
     <section className="relative min-h-[921px] flex items-center overflow-hidden">
