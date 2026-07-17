@@ -6,20 +6,25 @@ export default function CTASection() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-secondary opacity-10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
           <div className="relative z-10">
             <h2 className="font-headline-xl text-headline-xl text-white mb-6">
-              Siap mengamankan lobi Anda?
+              Bantuan &amp; Informasi
             </h2>
             <p className="font-body-lg text-body-lg text-surface-variant mb-10 max-w-xl mx-auto">
-              Bergabunglah dengan lebih dari 2.000 fasilitas global yang
-              menggunakan E-Tamu untuk mengelola pengunjung harian mereka dengan
-              percaya diri.
+              Butuh bantuan terkait pencatatan kunjungan atau akses sistem?
+              Hubungi bagian tata usaha atau admin IT kantor Anda.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="px-10 py-4 bg-secondary text-on-primary rounded-xl font-headline-md text-label-md hover:scale-105 transition-all">
-                Mulai Sekarang
-              </button>
-              <button className="px-10 py-4 border border-outline-variant text-white rounded-xl font-label-md hover:bg-white/10 transition-all">
-                Minta Demo
-              </button>
+              <a
+                href="#"
+                className="px-10 py-4 bg-secondary text-on-primary rounded-xl font-headline-md text-label-md hover:scale-105 transition-all"
+              >
+                Panduan Penggunaan
+              </a>
+              <a
+                href="#"
+                className="px-10 py-4 border border-outline-variant text-white rounded-xl font-label-md hover:bg-white/10 transition-all"
+              >
+                Hubungi Admin
+              </a>
             </div>
           </div>
         </div>

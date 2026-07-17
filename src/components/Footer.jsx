@@ -1,11 +1,6 @@
 import Icon from './Icon.jsx'
 
-const footerLinks = [
-  'Kebijakan Privasi',
-  'Ketentuan Layanan',
-  'Whitepaper Keamanan',
-  'Hubungi Dukungan'
-]
+const footerLinks = ['Kebijakan Internal', 'Panduan Pengguna', 'Hubungi Admin', 'Bantuan']
 
 export default function Footer() {
   return (
@@ -15,7 +10,7 @@ export default function Footer() {
           E-Tamu
         </span>
         <p className="font-body-md text-body-md text-surface-variant max-w-xs text-center md:text-left">
-          © 2024 Sistem Buku Tamu Digital. Keamanan Kelas Enterprise.
+          © 2024 Sistem Buku Tamu Internal Kantor.
         </p>
       </div>
       <div className="flex flex-wrap justify-center gap-8">
