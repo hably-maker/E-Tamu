@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react'
-import Icon from './Icon.jsx'
+import { Link, useLocation } from 'react-router-dom'
+import { useSiteSettings } from '../hooks/useSiteSettings.js'
 
 const navLinks = [
-  { label: 'Beranda', active: true },
-  { label: 'Pengunjung', active: false },
-  { label: 'Laporan', active: false },
-  { label: 'Pengaturan', active: false }
+  { label: 'Beranda', to: '/' },
+  { label: 'Pengunjung', to: '/pengunjung' }
 ]
 
-export default function TopNavBar() {
+export default function SiteNavBar() {
   const [scrolled, setScrolled] = useState(false)
+  const { pathname } = useLocation()
+  const { settings } = useSiteSettings()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
     window.addEventListener('scroll', onScroll)
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  const isActive = (to) =>
+    to === '/' ? pathname === '/' : pathname.startsWith(to)
 
   return (
     <header
@@ -25,35 +29,33 @@ export default function TopNavBar() {
       }`}
     >
       <div className="flex items-center gap-8">
-        <span className="font-headline-md text-headline-md font-bold text-on-surface">
-          E-Tamu
-        </span>
+        <Link to="/" className="flex items-center gap-2">
+          {settings.logo_url ? (
+            <img src={settings.logo_url} alt="E-Tamu" className="h-8 w-8 rounded object-cover" />
+          ) : (
+            <span className="font-headline-md text-headline-md font-bold text-on-surface">
+              E-Tamu
+            </span>
+          )}
+        </Link>
         <nav className="hidden md:flex gap-6">
           {navLinks.map((link) => (
-            <a
-              key={link.label}
-              href="#"
+            <Link
+              key={link.to}
+              to={link.to}
               className={`font-label-md text-label-md hover:text-secondary transition-colors transition-transform active:scale-95 ${
-                link.active
+                isActive(link.to)
                   ? 'text-secondary border-b-2 border-secondary pb-1'
                   : 'text-on-surface-variant'
               }`}
             >
               {link.label}
-            </a>
+            </Link>
           ))}
         </nav>
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="hidden lg:flex items-center bg-surface-container rounded-full px-4 py-1.5 gap-2 border border-outline-variant">
-          <Icon name="search" className="text-on-surface-variant text-[20px]" />
-          <input
-            className="bg-transparent border-none focus:ring-0 text-label-md w-32 xl:w-48"
-            placeholder="Cari pengunjung..."
-            type="text"
-          />
-        </div>
         <div className="flex gap-2">
           <button className="material-symbols-outlined text-on-surface-variant p-2 hover:bg-surface-container-high rounded-full transition-all">
             notifications
@@ -62,9 +64,12 @@ export default function TopNavBar() {
             account_circle
           </button>
         </div>
-        <button className="hidden md:block bg-secondary text-on-primary px-4 py-2 rounded-lg font-label-md hover:opacity-90 active:scale-95 transition-all">
-          Keluar
-        </button>
+        <Link
+          to="/login"
+          className="hidden md:block bg-secondary text-on-primary px-4 py-2 rounded-lg font-label-md hover:opacity-90 active:scale-95 transition-all"
+        >
+          Login Admin
+        </Link>
       </div>
     </header>
   )

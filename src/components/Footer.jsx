@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import Icon from './Icon.jsx'
 
 const footerLinks = ['Kebijakan Internal', 'Panduan Pengguna', 'Hubungi Admin', 'Bantuan']
@@ -23,6 +24,13 @@ export default function Footer() {
             {label}
           </a>
         ))}
+        <Link
+          to="/tv"
+          className="font-label-sm text-label-sm text-surface-variant hover:text-secondary-container underline transition-all flex items-center gap-1"
+        >
+          <Icon name="tv" className="text-[16px]" />
+          Mode TV
+        </Link>
       </div>
       <div className="flex gap-4">
         <button className="w-10 h-10 rounded-full bg-surface-variant/10 flex items-center justify-center text-on-primary hover:bg-secondary transition-all">

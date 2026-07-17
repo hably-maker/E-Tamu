@@ -1,11 +1,19 @@
 import { useEffect } from 'react'
-import TopNavBar from './components/TopNavBar.jsx'
+import { Routes, Route, useLocation } from 'react-router-dom'
+import SiteNavBar from './components/SiteNavBar.jsx'
 import Hero from './components/Hero.jsx'
 import FeaturesGrid from './components/FeaturesGrid.jsx'
-import CTASection from './components/CTASection.jsx'
 import Footer from './components/Footer.jsx'
+import ProtectedRoute from './components/ProtectedRoute.jsx'
+import AdminLogin from './pages/AdminLogin.jsx'
+import RegistrationForm from './pages/RegistrationForm.jsx'
+import TvDisplay from './pages/TvDisplay.jsx'
+import AdminDashboard from './pages/AdminDashboard.jsx'
 
 export default function App() {
+  const { pathname } = useLocation()
+  const showPublicNav = pathname === '/' || pathname === '/pengunjung'
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -25,14 +33,31 @@ export default function App() {
   }, [])
 
   return (
-    <div className="bg-surface text-on-surface font-body-md overflow-x-hidden min-h-screen">
-      <TopNavBar />
-      <main className="pt-16">
-        <Hero />
-        <FeaturesGrid />
-        <CTASection />
-      </main>
-      <Footer />
+    <div className="bg-surface text-on-surface font-body-md overflow-x-hidden min-h-screen flex flex-col">
+      {showPublicNav && <SiteNavBar />}
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <main className="pt-16">
+              <Hero />
+              <FeaturesGrid />
+              <Footer />
+            </main>
+          }
+        />
+        <Route path="/login" element={<AdminLogin />} />
+        <Route path="/pengunjung" element={<RegistrationForm />} />
+        <Route path="/tv" element={<TvDisplay />} />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
     </div>
   )
 }
