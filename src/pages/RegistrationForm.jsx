@@ -22,7 +22,7 @@ export default function RegistrationForm() {
   const [form, setForm] = useState({
     fullName: '',
     phoneNumber: '',
-    employeeId: '',
+    destination: '',
     purpose: '',
     otherPurpose: '',
     remarks: ''
@@ -77,13 +77,14 @@ export default function RegistrationForm() {
 
       const { error: visitErr } = await supabase.from('visits').insert({
         visitor_id: visitor.id,
-        employee_id: form.employeeId || null,
+        employee_id: null,
+        destination: form.destination || null,
         purpose: form.purpose === 'other' ? form.otherPurpose : form.purpose,
         remarks: form.remarks || null
       })
       if (visitErr) throw visitErr
 
-      setForm({ fullName: '', phoneNumber: '', employeeId: '', purpose: '', otherPurpose: '', remarks: '' })
+      setForm({ fullName: '', phoneNumber: '', destination: '', purpose: '', otherPurpose: '', remarks: '' })
       setShowToast(true)
       toastTimer.current = setTimeout(() => setShowToast(false), 5000)
     } catch (err) {
@@ -197,26 +198,19 @@ export default function RegistrationForm() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-label-md text-label-md text-on-surface" htmlFor="employeeId">
+                  <label className="font-label-md text-label-md text-on-surface" htmlFor="destination">
                     Tujuan
                   </label>
                   <div className="relative">
                     <Icon name="badge" className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-                    <select
-                      id="employeeId"
-                      value={form.employeeId}
-                      onChange={update('employeeId')}
-                      className={`${inputClass} appearance-none pr-10`}
-                    >
-                      <option value="">Pilih pegawai</option>
-                      {employees.map((emp) => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.full_name}
-                          {emp.position ? ` (${emp.position})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <Icon name="arrow_drop_down" className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant" />
+                    <input
+                      id="destination"
+                      value={form.destination}
+                      onChange={update('destination')}
+                      className={inputClass}
+                      placeholder="Contoh: Ruang Rapat 2, Lantai 3"
+                      type="text"
+                    />
                   </div>
                 </div>
 
