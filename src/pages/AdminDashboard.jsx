@@ -36,12 +36,31 @@ function formatTime(value) {
   })
 }
 
+function storagePathFromUrl(url) {
+  if (!url) return null
+  const marker = '/site-assets/'
+  const idx = url.indexOf(marker)
+  if (idx === -1) return null
+  return decodeURIComponent(url.slice(idx + marker.length))
+}
+
 function ImageField({ label, value, onUpload, previewClass }) {
   const [busy, setBusy] = useState(false)
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (!file.type.startsWith('image/')) {
+      alert('File harus berupa gambar.')
+      e.target.value = ''
+      return
+    }
+    const MAX = 5 * 1024 * 1024
+    if (file.size > MAX) {
+      alert('Ukuran maksimal 5 MB.')
+      e.target.value = ''
+      return
+    }
     setBusy(true)
     try {
       const ext = file.name.split('.').pop()
@@ -51,6 +70,11 @@ function ImageField({ label, value, onUpload, previewClass }) {
         .upload(path, file, { upsert: true })
       if (error) throw error
       const { data } = supabase.storage.from('site-assets').getPublicUrl(path)
+      // Hapus foto lama agar storage tidak penuh
+      const oldPath = storagePathFromUrl(value)
+      if (oldPath && oldPath !== path) {
+        await supabase.storage.from('site-assets').remove([oldPath])
+      }
       onUpload(data.publicUrl)
     } catch (err) {
       alert(err.message || 'Gagal mengunggah gambar.')

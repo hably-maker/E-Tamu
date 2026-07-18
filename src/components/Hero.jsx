@@ -8,9 +8,14 @@ const HERO_IMAGE =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuCNc6k0dBr0lnA31b6QZiwAxY-0S-amflEhT6VxQaJFHWOd4OeJUlnLtyk4wRlF0nQeicJtG0BHK66kMX3_3HnDLDuM1AqiMEga3m4f5kJdn7x9Mkf-5wBUI--CYnFK7EgbOejo7Vws1RyyUBKprLi1cNBxzD4F7qcNkyoYLPuniaA2MDroWv6nSwYDS9gj7Nx-YoTZ2mX2JDYtjI5jBA7hUiEgZhLAPHQHFHNEgZO_iHOPnveGkFOzJlu7AYb1qhA0P9yrRkJ0brI'
 
 export default function Hero() {
-  const { settings } = useSiteSettings()
-  const rawBg = settings.hero_bg_url || HERO_IMAGE
-  const bg = rawBg.includes('?') ? rawBg : `${rawBg}?v=${settings.updated_at || Date.now()}`
+  const { settings, loading } = useSiteSettings()
+  const [bgUrl, setBgUrl] = useState(HERO_IMAGE)
+
+  useEffect(() => {
+    if (!loading && settings.hero_bg_url) setBgUrl(settings.hero_bg_url)
+  }, [loading, settings.hero_bg_url])
+
+  const bg = bgUrl
 
   const [now, setNow] = useState(new Date())
   const [visitorCount, setVisitorCount] = useState(0)
@@ -57,10 +62,12 @@ export default function Hero() {
   })
 
   return (
-    <section className="relative min-h-[921px] flex items-center overflow-hidden">
+    <section className="relative min-h-[921px] flex items-center overflow-hidden bg-primary-container">
       <div className="absolute inset-0 z-0">
         <div
-          className="w-full h-full bg-cover bg-center brightness-75"
+          className={`w-full h-full bg-cover bg-center brightness-75 transition-opacity duration-500 ${
+            loading ? 'opacity-0' : 'opacity-100'
+          }`}
           style={{ backgroundImage: `url('${bg}')` }}
         />
       </div>
