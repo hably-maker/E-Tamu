@@ -120,31 +120,44 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [employeeFilter, setEmployeeFilter] = useState('all')
   const [query, setQuery] = useState('')
+  const PAGE_SIZE = 20
+  const [page, setPage] = useState(1)
+  const [totalVisits, setTotalVisits] = useState(0)
 
   useEffect(() => {
     setSettingsLocal(settings)
   }, [settings])
 
-  const loadVisits = async () => {
-    const { data, error } = await supabase
+  const loadVisits = async (targetPage = 1) => {
+    setLoading(true)
+    const from = (targetPage - 1) * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+    const { data, error, count } = await supabase
       .from('visits')
       .select(
-        'id, purpose, remarks, status, check_in_at, check_out_at, qr_code, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, position)'
+        'id, purpose, remarks, status, check_in_at, check_out_at, qr_code, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, position)',
+        { count: 'exact' }
       )
       .order('check_in_at', { ascending: false })
-    if (!error) setVisits(data || [])
+      .range(from, to)
+    if (!error) {
+      setVisits(data || [])
+      if (typeof count === 'number') setTotalVisits(count)
+    }
     setLoading(false)
   }
 
+  const totalPages = Math.max(1, Math.ceil(totalVisits / PAGE_SIZE))
+
   useEffect(() => {
-    loadVisits()
+    loadVisits(1)
 
     const channel = supabase
       .channel('visits-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'visits' },
-        () => loadVisits()
+        () => loadVisits(page)
       )
       .subscribe()
 
@@ -183,6 +196,8 @@ export default function AdminDashboard() {
   }
 
   const [employees, setEmployees] = useState([])
+  const EMP_PAGE_SIZE = 20
+  const [empPage, setEmpPage] = useState(1)
   const [editing, setEditing] = useState(null) // visit yang diedit
   const [editForm, setEditForm] = useState({ fullName: '', phone: '', employeeId: '', purpose: '', remarks: '' })
   const [saving, setSaving] = useState(false)
@@ -220,7 +235,9 @@ export default function AdminDashboard() {
   }
 
   // Employee management
-  const [empForm, setEmpForm] = useState({ fullName: '', position: '' })
+  const [empForm, setEmpForm] = useState({ fullName: '', rank: '', position: '' })
+  const [editingEmp, setEditingEmp] = useState(null)
+  const [empEditForm, setEmpEditForm] = useState({ fullName: '', rank: '', position: '' })
   const [savingEmp, setSavingEmp] = useState(false)
   const [empError, setEmpError] = useState('')
 
@@ -235,14 +252,52 @@ export default function AdminDashboard() {
     try {
       const { error } = await supabase
         .from('employees')
-        .insert({ full_name: empForm.fullName.trim(), position: empForm.position.trim() || null })
+        .insert({
+          full_name: empForm.fullName.trim(),
+          rank: empForm.rank.trim() || null,
+          position: empForm.position.trim() || null
+        })
       if (error) throw error
-      setEmpForm({ fullName: '', position: '' })
+      setEmpForm({ fullName: '', rank: '', position: '' })
       loadEmployees()
     } catch (err) {
       setEmpError(err.message || 'Gagal menambah pegawai.')
     } finally {
       setSavingEmp(false)
+    }
+  }
+
+  const openEditEmp = (emp) => {
+    setEditingEmp(emp)
+    setEmpEditForm({
+      fullName: emp.full_name || '',
+      rank: emp.rank || '',
+      position: emp.position || ''
+    })
+  }
+
+  const closeEditEmp = () => setEditingEmp(null)
+
+  const updateEmployee = async (e) => {
+    e.preventDefault()
+    if (!empEditForm.fullName.trim()) {
+      alert('Nama pegawai wajib diisi.')
+      return
+    }
+    try {
+      const { error } = await supabase
+        .from('employees')
+        .update({
+          full_name: empEditForm.fullName.trim(),
+          rank: empEditForm.rank.trim() || null,
+          position: empEditForm.position.trim() || null
+        })
+        .eq('id', editingEmp.id)
+      if (error) throw error
+      closeEditEmp()
+      loadEmployees()
+    } catch (err) {
+      alert(err.message || 'Gagal menyimpan perubahan.')
     }
   }
 
@@ -311,13 +366,19 @@ export default function AdminDashboard() {
   }
 
   const loadEmployees = async () => {
-    const { data } = await supabase.from('employees').select('id, full_name, position').order('full_name')
+    const { data, error } = await supabase
+      .from('employees')
+      .select('id, full_name, rank, position')
+      .order('full_name')
+    if (error) console.warn('Gagal memuat pegawai:', error.message)
     if (data) setEmployees(data)
   }
 
   // Activity logs
   const [logs, setLogs] = useState([])
   const [logOnlyMine, setLogOnlyMine] = useState(false)
+  const LOG_PAGE_SIZE = 20
+  const [logPage, setLogPage] = useState(1)
   const loadLogs = async () => {
     const { data } = await supabase
       .from('activity_logs')
@@ -377,7 +438,7 @@ export default function AdminDashboard() {
       if (visitErr) throw visitErr
 
       closeEdit()
-      loadVisits()
+      loadVisits(page)
       logActivity({
         profile,
         action: 'Mengedit Kunjungan',
@@ -400,7 +461,7 @@ export default function AdminDashboard() {
     try {
       const { error } = await supabase.from('visits').delete().eq('id', id)
       if (error) throw error
-      loadVisits()
+      loadVisits(page)
       logActivity({
         profile,
         action: 'Menghapus Kunjungan',
@@ -586,17 +647,6 @@ export default function AdminDashboard() {
             <span className="font-label-md text-label-md">Kelola Admin</span>
           </button>
           <button
-            onClick={() => selectTab('admin')}
-            className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
-              tab === 'admin'
-                ? 'bg-secondary-container text-on-secondary-container'
-                : 'text-on-surface-variant hover:bg-surface-container-high'
-            }`}
-          >
-            <Icon name="admin_panel_settings" />
-            <span className="font-label-md text-label-md">Kelola Admin</span>
-          </button>
-          <button
             onClick={() => selectTab('log')}
             className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
               tab === 'log'
@@ -606,6 +656,17 @@ export default function AdminDashboard() {
           >
             <Icon name="history" />
             <span className="font-label-md text-label-md">Log Aktivitas</span>
+          </button>
+          <button
+            onClick={() => selectTab('pengaturan')}
+            className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
+              tab === 'pengaturan'
+                ? 'bg-secondary-container text-on-secondary-container'
+                : 'text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            <Icon name="settings" />
+            <span className="font-label-md text-label-md">Pengaturan</span>
           </button>
         </nav>
         <div className="px-4 py-6 mt-auto">
@@ -643,7 +704,10 @@ export default function AdminDashboard() {
                 />
                 <input
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => {
+                    setQuery(e.target.value)
+                    setPage(1)
+                  }}
                   className="w-full pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-full font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 outline-none"
                   placeholder="Cari pengunjung, log, atau kode..."
                   type="text"
@@ -842,7 +906,10 @@ export default function AdminDashboard() {
                   />
                   <select
                     value={employeeFilter}
-                    onChange={(e) => setEmployeeFilter(e.target.value)}
+                    onChange={(e) => {
+                      setEmployeeFilter(e.target.value)
+                      setPage(1)
+                    }}
                     className="pl-8 pr-4 py-1.5 bg-surface-container-low border-none rounded-lg font-label-sm text-label-sm outline-none focus:ring-1 focus:ring-secondary cursor-pointer"
                   >
                     <option value="all">Semua Tujuan</option>
@@ -916,7 +983,7 @@ export default function AdminDashboard() {
                           {v.employees?.full_name || v.destination_text || 'Lobi'}
                         </p>
                         <p className="text-[12px] text-on-surface-variant">
-                          {v.employees?.position || (v.destination_text ? 'Tujuan lainnya' : '-')}
+                          {(v.employees?.rank ? `${v.employees.rank} ` : '') + (v.employees?.position || (v.destination_text ? 'Tujuan lainnya' : '-'))}
                         </p>
                       </td>
                       <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">
@@ -953,10 +1020,26 @@ export default function AdminDashboard() {
               </table>
             </div>
 
-            <div className="px-6 py-4 border-t border-outline-variant flex items-center justify-between">
+            <div className="px-6 py-4 border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-3">
               <p className="font-label-sm text-label-sm text-on-surface-variant">
-                Menampilkan {filtered.length} dari {visits.length} kunjungan
+                Total {totalVisits} kunjungan &middot; Halaman {page} dari {totalPages}
               </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { const p = Math.max(1, page - 1); setPage(p); loadVisits(p) }}
+                  disabled={page <= 1}
+                  className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface font-label-md hover:bg-surface-container-high transition-all disabled:opacity-50"
+                >
+                  Sebelumnya
+                </button>
+                <button
+                  onClick={() => { const p = Math.min(totalPages, page + 1); setPage(p); loadVisits(p) }}
+                  disabled={page >= totalPages}
+                  className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface font-label-md hover:bg-surface-container-high transition-all disabled:opacity-50"
+                >
+                  Berikutnya
+                </button>
+              </div>
               <Link
                 to="/login"
                 onClick={handleLogout}
@@ -986,7 +1069,7 @@ export default function AdminDashboard() {
                 <h4 className="font-headline-md text-headline-md text-on-surface mb-4">
                   Tambah Pegawai
                 </h4>
-                <form onSubmit={addEmployee} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <form onSubmit={addEmployee} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                   <div>
                     <label className="block font-label-md text-label-md text-on-surface mb-1">Nama Lengkap</label>
                     <input
@@ -994,6 +1077,15 @@ export default function AdminDashboard() {
                       onChange={(e) => setEmpForm((f) => ({ ...f, fullName: e.target.value }))}
                       className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
                       placeholder="Nama pegawai"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-label-md text-label-md text-on-surface mb-1">Pangkat</label>
+                    <input
+                      value={empForm.rank}
+                      onChange={(e) => setEmpForm((f) => ({ ...f, rank: e.target.value }))}
+                      className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
+                      placeholder="Mis. Kapten"
                     />
                   </div>
                   <div>
@@ -1033,6 +1125,7 @@ export default function AdminDashboard() {
                     <thead className="bg-surface-container-low">
                       <tr>
                         <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Nama Pegawai</th>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Pangkat</th>
                         <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Jabatan</th>
                         <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest text-right">Aksi</th>
                       </tr>
@@ -1040,28 +1133,61 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-outline-variant/50">
                       {employees.length === 0 && (
                         <tr>
-                          <td colSpan={3} className="px-6 py-8 text-center text-on-surface-variant">
+                          <td colSpan={4} className="px-6 py-8 text-center text-on-surface-variant">
                             Belum ada data pegawai.
                           </td>
                         </tr>
                       )}
-                      {employees.map((emp) => (
+                      {employees
+                        .slice((empPage - 1) * EMP_PAGE_SIZE, empPage * EMP_PAGE_SIZE)
+                        .map((emp) => (
                         <tr key={emp.id} className="hover:bg-surface-container-low transition-colors">
                           <td className="px-6 py-4 font-label-md text-label-md font-bold text-on-surface">{emp.full_name}</td>
+                          <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">{emp.rank || '-'}</td>
                           <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">{emp.position || '-'}</td>
                           <td className="px-6 py-4 text-right">
-                            <button
-                              onClick={() => deleteEmployee(emp.id)}
-                              className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error-container hover:text-on-error-container transition-all"
-                              title="Hapus"
-                            >
-                              <Icon name="delete" className="text-[18px]" />
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => openEditEmp(emp)}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-secondary transition-all"
+                                title="Edit"
+                              >
+                                <Icon name="edit" className="text-[18px]" />
+                              </button>
+                              <button
+                                onClick={() => deleteEmployee(emp.id)}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error-container hover:text-on-error-container transition-all"
+                                title="Hapus"
+                              >
+                                <Icon name="delete" className="text-[18px]" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                </div>
+                <div className="px-6 py-4 border-t border-outline-variant flex items-center justify-between">
+                  <p className="font-label-sm text-label-sm text-on-surface-variant">
+                    Halaman {empPage} dari {Math.max(1, Math.ceil(employees.length / EMP_PAGE_SIZE))}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setEmpPage((p) => Math.max(1, p - 1))}
+                      disabled={empPage <= 1}
+                      className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface font-label-md hover:bg-surface-container-high transition-all disabled:opacity-50"
+                    >
+                      Sebelumnya
+                    </button>
+                    <button
+                      onClick={() => setEmpPage((p) => Math.min(Math.ceil(employees.length / EMP_PAGE_SIZE), p + 1))}
+                      disabled={empPage >= Math.ceil(employees.length / EMP_PAGE_SIZE)}
+                      className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface font-label-md hover:bg-surface-container-high transition-all disabled:opacity-50"
+                    >
+                      Berikutnya
+                    </button>
+                  </div>
                 </div>
               </div>
             </>
@@ -1229,27 +1355,58 @@ export default function AdminDashboard() {
                             </tr>
                           )
                         }
-                        return filtered.map((l) => (
-                          <tr key={l.id} className="hover:bg-surface-container-low transition-colors">
-                            <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant whitespace-nowrap">
-                              {new Date(l.created_at).toLocaleString('id-ID', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </td>
-                            <td className="px-6 py-4 font-label-md text-label-md font-bold text-on-surface">{l.admin_name || '-'}</td>
-                            <td className="px-6 py-4">
-                              <span className={`font-label-sm text-label-sm px-3 py-1 rounded-full ${l.action.includes('Hapus') ? 'bg-error-container text-on-error-container' : 'bg-secondary-container text-on-secondary-container'}`}>
-                                {l.action}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">{l.target_name || '-'}</td>
-                            <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant max-w-xs">{l.detail || '-'}</td>
-                          </tr>
-                        ))
+                        const paged = filtered.slice((logPage - 1) * LOG_PAGE_SIZE, logPage * LOG_PAGE_SIZE)
+                        const totalLogPages = Math.max(1, Math.ceil(filtered.length / LOG_PAGE_SIZE))
+                        return (
+                          <>
+                            {paged.map((l) => (
+                              <tr key={l.id} className="hover:bg-surface-container-low transition-colors">
+                                <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant whitespace-nowrap">
+                                  {new Date(l.created_at).toLocaleString('id-ID', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </td>
+                                <td className="px-6 py-4 font-label-md text-label-md font-bold text-on-surface">{l.admin_name || '-'}</td>
+                                <td className="px-6 py-4">
+                                  <span className={`font-label-sm text-label-sm px-3 py-1 rounded-full ${l.action.includes('Hapus') ? 'bg-error-container text-on-error-container' : 'bg-secondary-container text-on-secondary-container'}`}>
+                                    {l.action}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">{l.target_name || '-'}</td>
+                                <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant max-w-xs">{l.detail || '-'}</td>
+                              </tr>
+                            ))}
+                            <tr>
+                              <td colSpan={5} className="px-6 py-4">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-label-sm text-label-sm text-on-surface-variant">
+                                    Halaman {logPage} dari {totalLogPages}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => setLogPage((p) => Math.max(1, p - 1))}
+                                      disabled={logPage <= 1}
+                                      className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface font-label-md hover:bg-surface-container-high transition-all disabled:opacity-50"
+                                    >
+                                      Sebelumnya
+                                    </button>
+                                    <button
+                                      onClick={() => setLogPage((p) => Math.min(totalLogPages, p + 1))}
+                                      disabled={logPage >= totalLogPages}
+                                      className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface font-label-md hover:bg-surface-container-high transition-all disabled:opacity-50"
+                                    >
+                                      Berikutnya
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          </>
+                        )
                       })()}
                     </tbody>
                   </table>
@@ -1327,7 +1484,7 @@ export default function AdminDashboard() {
                 <select value={editForm.employeeId} onChange={(e) => setEditForm((f) => ({ ...f, employeeId: e.target.value }))} className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary">
                   <option value="">Lobi</option>
                   {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>{emp.full_name}{emp.position ? ` (${emp.position})` : ''}</option>
+                    <option key={emp.id} value={emp.id}>{emp.full_name}{emp.rank ? ` (${emp.rank})` : ''}{emp.position ? ` - ${emp.position}` : ''}</option>
                   ))}
                 </select>
               </div>
@@ -1352,6 +1509,42 @@ export default function AdminDashboard() {
                 </button>
                 <button type="submit" disabled={saving} className="px-4 py-2 rounded-lg bg-secondary text-on-primary font-label-md hover:opacity-90 transition-all disabled:opacity-60">
                   {saving ? 'Menyimpan...' : 'Simpan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Employee Modal */}
+      {editingEmp && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-margin-mobile">
+          <div className="w-full max-w-lg bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-xl p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-headline-md text-headline-md text-on-surface">Edit Pegawai</h3>
+              <button onClick={closeEditEmp} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high">
+                <Icon name="close" />
+              </button>
+            </div>
+            <form onSubmit={updateEmployee} className="space-y-4">
+              <div>
+                <label className="block font-label-md text-label-md text-on-surface mb-1">Nama Lengkap</label>
+                <input value={empEditForm.fullName} onChange={(e) => setEmpEditForm((f) => ({ ...f, fullName: e.target.value }))} className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary" />
+              </div>
+              <div>
+                <label className="block font-label-md text-label-md text-on-surface mb-1">Pangkat</label>
+                <input value={empEditForm.rank} onChange={(e) => setEmpEditForm((f) => ({ ...f, rank: e.target.value }))} className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary" placeholder="Mis. Kapten" />
+              </div>
+              <div>
+                <label className="block font-label-md text-label-md text-on-surface mb-1">Jabatan</label>
+                <input value={empEditForm.position} onChange={(e) => setEmpEditForm((f) => ({ ...f, position: e.target.value }))} className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary" placeholder="Jabatan / Posisi" />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={closeEditEmp} className="px-4 py-2 rounded-lg border border-outline-variant text-on-surface font-label-md hover:bg-surface-container-high transition-all">
+                  Batal
+                </button>
+                <button type="submit" className="px-4 py-2 rounded-lg bg-secondary text-on-primary font-label-md hover:opacity-90 transition-all">
+                  Simpan
                 </button>
               </div>
             </form>

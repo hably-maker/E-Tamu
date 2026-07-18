@@ -44,12 +44,13 @@ export default function RegistrationForm() {
 
   const destMatches = useMemo(() => {
     const q = destInput.trim().toLowerCase()
-    if (!q) return employees.slice(0, 8)
+    if (!q) return []
     return employees
       .filter((e) => {
         const name = (e.full_name || '').toLowerCase()
         const pos = (e.position || '').toLowerCase()
-        return name.includes(q) || pos.includes(q)
+        const rk = (e.rank || '').toLowerCase()
+        return name.includes(q) || pos.includes(q) || rk.includes(q)
       })
       .slice(0, 8)
   }, [destInput, employees])
@@ -63,7 +64,7 @@ export default function RegistrationForm() {
   }, [])
 
   const pickEmployee = (emp) => {
-    setDestInput(`${emp.full_name}${emp.position ? ` (${emp.position})` : ''}`)
+    setDestInput(`${emp.full_name}${emp.rank ? ` (${emp.rank})` : ''}${emp.position ? ` - ${emp.position}` : ''}`)
     setDestEmployeeId(emp.id)
     setDestOther(false)
     setDestOtherText('')
@@ -278,7 +279,9 @@ export default function RegistrationForm() {
                             onClick={() => pickEmployee(emp)}
                             className="w-full text-left px-4 py-2.5 hover:bg-surface-container-high transition-all flex flex-col"
                           >
-                            <span className="font-label-md text-label-md text-on-surface">{emp.full_name}</span>
+                            <span className="font-label-md text-label-md text-on-surface">
+                              {emp.full_name}{emp.rank ? ` (${emp.rank})` : ''}
+                            </span>
                             {emp.position && (
                               <span className="font-label-sm text-label-sm text-on-surface-variant">{emp.position}</span>
                             )}
