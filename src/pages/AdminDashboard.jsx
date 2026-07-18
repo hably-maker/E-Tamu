@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../hooks/useAuth.js'
 import { useSiteSettings } from '../hooks/useSiteSettings.js'
 import { exportCSV, exportExcel, exportPDF } from '../lib/export.js'
+import { logActivity } from '../lib/activityLog.js'
 import Icon from '../components/Icon.jsx'
 
 function initials(name = '') {
@@ -314,6 +315,18 @@ export default function AdminDashboard() {
     if (data) setEmployees(data)
   }
 
+  // Activity logs
+  const [logs, setLogs] = useState([])
+  const [logOnlyMine, setLogOnlyMine] = useState(false)
+  const loadLogs = async () => {
+    const { data } = await supabase
+      .from('activity_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200)
+    if (data) setLogs(data)
+  }
+
   // Export state
   const [exportMode, setExportMode] = useState('all') // all | range | month | year
   const [rangeStart, setRangeStart] = useState('')
@@ -326,6 +339,7 @@ export default function AdminDashboard() {
     loadChart()
     loadEmployees()
     loadAdmins()
+    loadLogs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -364,6 +378,14 @@ export default function AdminDashboard() {
 
       closeEdit()
       loadVisits()
+      logActivity({
+        profile,
+        action: 'Mengedit Kunjungan',
+        targetType: 'visits',
+        targetId: editing.id,
+        targetName: editForm.fullName || editing.visitors?.full_name,
+        detail: `Tujuan: ${editForm.employeeId ? employees.find((e) => e.id === editForm.employeeId)?.full_name || 'Lobi' : 'Lobi'}, Keperluan: ${editForm.purpose}`
+      })
     } catch (err) {
       alert(err.message || 'Gagal menyimpan perubahan.')
     } finally {
@@ -373,11 +395,19 @@ export default function AdminDashboard() {
 
   const handleDelete = async (id) => {
     if (!confirm('Yakin ingin menghapus data kunjungan ini?')) return
+    const target = visits.find((v) => v.id === id)
     setDeletingId(id)
     try {
       const { error } = await supabase.from('visits').delete().eq('id', id)
       if (error) throw error
       loadVisits()
+      logActivity({
+        profile,
+        action: 'Menghapus Kunjungan',
+        targetType: 'visits',
+        targetId: id,
+        targetName: target?.visitors?.full_name || '-'
+      })
     } catch (err) {
       alert(err.message || 'Gagal menghapus data.')
     } finally {
@@ -556,15 +586,26 @@ export default function AdminDashboard() {
             <span className="font-label-md text-label-md">Kelola Admin</span>
           </button>
           <button
-            onClick={() => selectTab('pengaturan')}
+            onClick={() => selectTab('admin')}
             className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
-              tab === 'pengaturan'
+              tab === 'admin'
                 ? 'bg-secondary-container text-on-secondary-container'
                 : 'text-on-surface-variant hover:bg-surface-container-high'
             }`}
           >
-            <Icon name="settings" />
-            <span className="font-label-md text-label-md">Pengaturan</span>
+            <Icon name="admin_panel_settings" />
+            <span className="font-label-md text-label-md">Kelola Admin</span>
+          </button>
+          <button
+            onClick={() => selectTab('log')}
+            className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
+              tab === 'log'
+                ? 'bg-secondary-container text-on-secondary-container'
+                : 'text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            <Icon name="history" />
+            <span className="font-label-md text-label-md">Log Aktivitas</span>
           </button>
         </nav>
         <div className="px-4 py-6 mt-auto">
@@ -872,10 +913,10 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-6 py-4">
                         <p className="font-label-md text-label-md text-on-surface">
-                          {v.employees?.full_name || 'Lobi'}
+                          {v.employees?.full_name || v.destination_text || 'Lobi'}
                         </p>
                         <p className="text-[12px] text-on-surface-variant">
-                          {v.employees?.position || '-'}
+                          {v.employees?.position || (v.destination_text ? 'Tujuan lainnya' : '-')}
                         </p>
                       </td>
                       <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">
@@ -1133,6 +1174,83 @@ export default function AdminDashboard() {
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+
+          {tab === 'log' && (
+            <>
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+                <div>
+                  <h2 className="font-headline-lg text-headline-lg text-primary tracking-tight">
+                    Log Aktivitas
+                  </h2>
+                  <p className="font-body-md text-body-md text-on-surface-variant">
+                    Catatan siapa yang mengedit atau menghapus data kunjungan.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={logOnlyMine}
+                    onChange={(e) => setLogOnlyMine(e.target.checked)}
+                    className="w-4 h-4 accent-secondary"
+                  />
+                  <span className="font-label-md text-label-md text-on-surface">Hanya aktivitas saya</span>
+                </label>
+              </div>
+
+              <div className="glass-card rounded-xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-surface-container-low">
+                      <tr>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Waktu</th>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Admin</th>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Aksi</th>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Target</th>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Detail</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/50">
+                      {(() => {
+                        const filtered = logOnlyMine
+                          ? logs.filter((l) => l.admin_id === profile?.id)
+                          : logs
+                        if (filtered.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={5} className="px-6 py-8 text-center text-on-surface-variant">
+                                Belum ada aktivitas.
+                              </td>
+                            </tr>
+                          )
+                        }
+                        return filtered.map((l) => (
+                          <tr key={l.id} className="hover:bg-surface-container-low transition-colors">
+                            <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant whitespace-nowrap">
+                              {new Date(l.created_at).toLocaleString('id-ID', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </td>
+                            <td className="px-6 py-4 font-label-md text-label-md font-bold text-on-surface">{l.admin_name || '-'}</td>
+                            <td className="px-6 py-4">
+                              <span className={`font-label-sm text-label-sm px-3 py-1 rounded-full ${l.action.includes('Hapus') ? 'bg-error-container text-on-error-container' : 'bg-secondary-container text-on-secondary-container'}`}>
+                                {l.action}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">{l.target_name || '-'}</td>
+                            <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant max-w-xs">{l.detail || '-'}</td>
+                          </tr>
+                        ))
+                      })()}
                     </tbody>
                   </table>
                 </div>

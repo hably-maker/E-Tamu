@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import Icon from '../components/Icon.jsx'
 import SiteNavBar from '../components/SiteNavBar.jsx'
@@ -33,6 +33,48 @@ export default function RegistrationForm() {
   const [showToast, setShowToast] = useState(false)
   const [error, setError] = useState('')
   const toastTimer = useRef(null)
+
+  // Autocomplete tujuan (yang ditemui)
+  const [destInput, setDestInput] = useState('')
+  const [destEmployeeId, setDestEmployeeId] = useState(null)
+  const [destOther, setDestOther] = useState(false)
+  const [destOtherText, setDestOtherText] = useState('')
+  const [destOpen, setDestOpen] = useState(false)
+  const destRef = useRef(null)
+
+  const destMatches = useMemo(() => {
+    const q = destInput.trim().toLowerCase()
+    if (!q) return employees.slice(0, 8)
+    return employees
+      .filter((e) => {
+        const name = (e.full_name || '').toLowerCase()
+        const pos = (e.position || '').toLowerCase()
+        return name.includes(q) || pos.includes(q)
+      })
+      .slice(0, 8)
+  }, [destInput, employees])
+
+  useEffect(() => {
+    const onClick = (e) => {
+      if (destRef.current && !destRef.current.contains(e.target)) setDestOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+
+  const pickEmployee = (emp) => {
+    setDestInput(`${emp.full_name}${emp.position ? ` (${emp.position})` : ''}`)
+    setDestEmployeeId(emp.id)
+    setDestOther(false)
+    setDestOtherText('')
+    setDestOpen(false)
+  }
+
+  const chooseOther = () => {
+    setDestOther(true)
+    setDestEmployeeId(null)
+    setDestOpen(false)
+  }
 
   useEffect(() => {
     const update = () => {
@@ -77,13 +119,18 @@ export default function RegistrationForm() {
 
       const { error: visitErr } = await supabase.from('visits').insert({
         visitor_id: visitor.id,
-        employee_id: form.employeeId || null,
+        employee_id: destEmployeeId || null,
+        destination_text: destOther ? destOtherText.trim() || null : null,
         purpose: form.purpose === 'other' ? form.otherPurpose : form.purpose,
         remarks: form.remarks || null
       })
       if (visitErr) throw visitErr
 
       setForm({ fullName: '', phoneNumber: '', employeeId: '', purpose: '', otherPurpose: '', remarks: '' })
+      setDestInput('')
+      setDestEmployeeId(null)
+      setDestOther(false)
+      setDestOtherText('')
       setShowToast(true)
       toastTimer.current = setTimeout(() => setShowToast(false), 5000)
     } catch (err) {
@@ -196,28 +243,70 @@ export default function RegistrationForm() {
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="font-label-md text-label-md text-on-surface" htmlFor="employeeId">
+                <div className="space-y-1" ref={destRef}>
+                  <label className="font-label-md text-label-md text-on-surface" htmlFor="destInput">
                     Tujuan (Yang Ditemui)
                   </label>
                   <div className="relative">
                     <Icon name="badge" className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-                    <select
-                      id="employeeId"
-                      value={form.employeeId}
-                      onChange={update('employeeId')}
-                      className={`${inputClass} appearance-none pr-10`}
-                    >
-                      <option value="">Pilih pegawai</option>
-                      {employees.map((emp) => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.full_name}
-                          {emp.position ? ` (${emp.position})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <Icon name="arrow_drop_down" className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant" />
+                    <input
+                      id="destInput"
+                      value={destInput}
+                      onChange={(e) => {
+                        setDestInput(e.target.value)
+                        setDestEmployeeId(null)
+                        setDestOther(false)
+                        setDestOpen(true)
+                      }}
+                      onFocus={() => setDestOpen(true)}
+                      className={inputClass}
+                      placeholder="Ketik nama pegawai..."
+                      type="text"
+                      autoComplete="off"
+                    />
+                    {destOpen && (
+                      <div className="absolute z-20 mt-1 w-full bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {destMatches.length === 0 && !destOther && (
+                          <div className="px-4 py-3 text-label-md text-on-surface-variant">
+                            Tidak ada rekomendasi
+                          </div>
+                        )}
+                        {destMatches.map((emp) => (
+                          <button
+                            key={emp.id}
+                            type="button"
+                            onClick={() => pickEmployee(emp)}
+                            className="w-full text-left px-4 py-2.5 hover:bg-surface-container-high transition-all flex flex-col"
+                          >
+                            <span className="font-label-md text-label-md text-on-surface">{emp.full_name}</span>
+                            {emp.position && (
+                              <span className="font-label-sm text-label-sm text-on-surface-variant">{emp.position}</span>
+                            )}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={chooseOther}
+                          className="w-full text-left px-4 py-2.5 hover:bg-surface-container-high transition-all flex items-center gap-2 border-t border-outline-variant"
+                        >
+                          <Icon name="add" className="text-[18px] text-secondary" />
+                          <span className="font-label-md text-label-md text-secondary">Lainnya (tulis sendiri)</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
+                  {destOther && (
+                    <div className="relative mt-3">
+                      <Icon name="edit_note" className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
+                      <input
+                        value={destOtherText}
+                        onChange={(e) => setDestOtherText(e.target.value)}
+                        className={inputClass}
+                        placeholder="Sebutkan nama yang dimaksud"
+                        type="text"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1">
