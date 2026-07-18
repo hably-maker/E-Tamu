@@ -83,7 +83,12 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   const { profile, signOut } = useAuth()
   const { settings, reload } = useSiteSettings()
-  const [tab, setTab] = useState('dasbor') // dasbor | pengaturan
+  const [tab, setTab] = useState('dasbor') // dasbor | pegawai | admin | pengaturan
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const selectTab = (t) => {
+    setTab(t)
+    setSidebarOpen(false)
+  }
   const [settingsLocal, setSettingsLocal] = useState(settings)
   const [savingSettings, setSavingSettings] = useState(false)
   const [visits, setVisits] = useState([])
@@ -158,6 +163,133 @@ export default function AdminDashboard() {
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
 
+  // Chart: kunjungan per hari kerja (Senin-Jumat), 5 hari kerja terakhir
+  const [chartData, setChartData] = useState([])
+  const loadChart = async () => {
+    const days = []
+    const now = new Date()
+    let added = 0
+    let cursor = new Date(now)
+    while (added < 5) {
+      const dow = cursor.getDay() // 0 = Minggu, 6 = Sabtu
+      if (dow !== 0 && dow !== 6) {
+        const d = new Date(cursor)
+        d.setHours(0, 0, 0, 0)
+        const end = new Date(d)
+        end.setHours(23, 59, 59, 999)
+        const { count } = await supabase
+          .from('visits')
+          .select('*', { count: 'exact', head: true })
+          .gte('check_in_at', d.toISOString())
+          .lte('check_in_at', end.toISOString())
+        days.push({
+          label: d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),
+          count: count || 0
+        })
+        added++
+      }
+      cursor.setDate(cursor.getDate() - 1)
+    }
+    days.reverse()
+    setChartData(days)
+  }
+
+  // Employee management
+  const [empForm, setEmpForm] = useState({ fullName: '', position: '' })
+  const [savingEmp, setSavingEmp] = useState(false)
+  const [empError, setEmpError] = useState('')
+
+  const addEmployee = async (e) => {
+    e.preventDefault()
+    setEmpError('')
+    if (!empForm.fullName.trim()) {
+      setEmpError('Nama pegawai wajib diisi.')
+      return
+    }
+    setSavingEmp(true)
+    try {
+      const { error } = await supabase
+        .from('employees')
+        .insert({ full_name: empForm.fullName.trim(), position: empForm.position.trim() || null })
+      if (error) throw error
+      setEmpForm({ fullName: '', position: '' })
+      loadEmployees()
+    } catch (err) {
+      setEmpError(err.message || 'Gagal menambah pegawai.')
+    } finally {
+      setSavingEmp(false)
+    }
+  }
+
+  const deleteEmployee = async (id) => {
+    if (!confirm('Yakin ingin menghapus pegawai ini?')) return
+    try {
+      const { error } = await supabase.from('employees').delete().eq('id', id)
+      if (error) throw error
+      loadEmployees()
+    } catch (err) {
+      alert(err.message || 'Gagal menghapus pegawai.')
+    }
+  }
+
+  // Admin management
+  const [admins, setAdmins] = useState([])
+  const [adminForm, setAdminForm] = useState({ fullName: '', email: '', password: '' })
+  const [savingAdmin, setSavingAdmin] = useState(false)
+  const [adminError, setAdminError] = useState('')
+
+  const loadAdmins = async () => {
+    const { data } = await supabase.from('profiles').select('id, full_name, role, email').order('full_name')
+    if (data) setAdmins(data)
+  }
+
+  const addAdmin = async (e) => {
+    e.preventDefault()
+    setAdminError('')
+    if (!adminForm.email.trim() || !adminForm.password || adminForm.password.length < 6) {
+      setAdminError('Email wajib diisi dan kata sandi minimal 6 karakter.')
+      return
+    }
+    setSavingAdmin(true)
+    try {
+      const { data, error } = await supabase.auth.admin.createUser({
+        email: adminForm.email.trim(),
+        password: adminForm.password,
+        email_confirm: true,
+        user_metadata: { full_name: adminForm.fullName.trim() || adminForm.email.trim(), role: 'admin' }
+      })
+      if (error) throw error
+      if (data?.user) {
+        await supabase
+          .from('profiles')
+          .update({ role: 'admin', full_name: adminForm.fullName.trim() || adminForm.email.trim() })
+          .eq('id', data.user.id)
+      }
+      setAdminForm({ fullName: '', email: '', password: '' })
+      loadAdmins()
+    } catch (err) {
+      setAdminError(err.message || 'Gagal menambah admin.')
+    } finally {
+      setSavingAdmin(false)
+    }
+  }
+
+  const toggleAdminRole = async (id, currentRole) => {
+    const newRole = currentRole === 'admin' ? 'staff' : 'admin'
+    try {
+      const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', id)
+      if (error) throw error
+      loadAdmins()
+    } catch (err) {
+      alert(err.message || 'Gagal mengubah peran.')
+    }
+  }
+
+  const loadEmployees = async () => {
+    const { data } = await supabase.from('employees').select('id, full_name, position').order('full_name')
+    if (data) setEmployees(data)
+  }
+
   // Export state
   const [exportMode, setExportMode] = useState('all') // all | range | month | year
   const [rangeStart, setRangeStart] = useState('')
@@ -167,11 +299,10 @@ export default function AdminDashboard() {
   const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase.from('employees').select('id, full_name, position').order('full_name')
-      if (data) setEmployees(data)
-    }
-    load()
+    loadChart()
+    loadEmployees()
+    loadAdmins()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const openEdit = (v) => {
@@ -275,8 +406,17 @@ export default function AdminDashboard() {
   }, [visits])
 
   const weeklyCount = useMemo(() => {
-    const start = new Date()
-    start.setDate(start.getDate() - 7)
+    const now = new Date()
+    const day = now.getDay() || 7
+    const monday = new Date(now)
+    monday.setDate(now.getDate() - (day - 1))
+    monday.setHours(0, 0, 0, 0)
+    return visits.filter((v) => new Date(v.check_in_at) >= monday).length
+  }, [visits])
+
+  const monthCount = useMemo(() => {
+    const now = new Date()
+    const start = new Date(now.getFullYear(), now.getMonth(), 1)
     return visits.filter((v) => new Date(v.check_in_at) >= start).length
   }, [visits])
 
@@ -303,8 +443,20 @@ export default function AdminDashboard() {
 
   return (
     <div className="bg-surface text-on-surface min-h-screen flex">
+      {/* Overlay for mobile sidebar */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="hidden lg:flex flex-col fixed left-0 top-0 h-full z-40 bg-surface-container-lowest border-r border-outline-variant w-64">
+      <aside
+        className={`fixed left-0 top-0 h-full z-50 bg-surface-container-lowest border-r border-outline-variant w-64 flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static lg:z-40 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         <div className="p-6 flex flex-col gap-1">
           <div className="flex items-center gap-3">
             {settings.logo_url ? (
@@ -322,6 +474,13 @@ export default function AdminDashboard() {
                 Keamanan Kantor
               </p>
             </div>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden ml-auto w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high"
+              aria-label="Tutup menu"
+            >
+              <Icon name="close" />
+            </button>
           </div>
         </div>
         <nav className="flex-1 mt-4 px-2 space-y-1">
@@ -340,7 +499,7 @@ export default function AdminDashboard() {
             <span className="font-label-md text-label-md">Pengunjung</span>
           </Link>
           <button
-            onClick={() => setTab('dasbor')}
+            onClick={() => selectTab('dasbor')}
             className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
               tab === 'dasbor'
                 ? 'bg-secondary-container text-on-secondary-container'
@@ -351,7 +510,29 @@ export default function AdminDashboard() {
             <span className="font-label-md text-label-md">Dasbor</span>
           </button>
           <button
-            onClick={() => setTab('pengaturan')}
+            onClick={() => selectTab('pegawai')}
+            className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
+              tab === 'pegawai'
+                ? 'bg-secondary-container text-on-secondary-container'
+                : 'text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            <Icon name="groups" />
+            <span className="font-label-md text-label-md">Data Pegawai</span>
+          </button>
+          <button
+            onClick={() => selectTab('admin')}
+            className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
+              tab === 'admin'
+                ? 'bg-secondary-container text-on-secondary-container'
+                : 'text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            <Icon name="admin_panel_settings" />
+            <span className="font-label-md text-label-md">Kelola Admin</span>
+          </button>
+          <button
+            onClick={() => selectTab('pengaturan')}
             className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
               tab === 'pengaturan'
                 ? 'bg-secondary-container text-on-secondary-container'
@@ -374,12 +555,21 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main */}
-      <div className="flex-1 lg:pl-64">
+      <div className="flex-1 min-w-0">
         <header className="fixed top-0 right-0 left-0 lg:left-64 h-16 z-50">
-          <div className="h-full bg-surface border-b border-outline-variant shadow-sm flex justify-between items-center px-6 lg:px-margin-desktop">
-            <h1 className="font-headline-md text-headline-md font-bold text-on-surface lg:hidden">
-              E-Tamu
-            </h1>
+          <div className="h-full bg-surface border-b border-outline-variant shadow-sm flex justify-between items-center px-4 md:px-6 lg:px-margin-desktop">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen((o) => !o)}
+                className="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high"
+                aria-label="Buka/tutup menu"
+              >
+                <Icon name="menu" className="text-[22px]" />
+              </button>
+              <h1 className="font-headline-md text-headline-md font-bold text-on-surface lg:hidden">
+                E-Tamu
+              </h1>
+            </div>
             <div className="hidden md:flex flex-1 max-w-md ml-auto mr-8">
               <div className="relative w-full">
                 <Icon
@@ -423,7 +613,7 @@ export default function AdminDashboard() {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
             <div>
               <h2 className="font-headline-lg text-headline-lg text-primary tracking-tight">
-                Dasbor Keamanan
+                Dasbor Admin
               </h2>
               <p className="font-body-md text-body-md text-on-surface-variant">
                 Pengawasan waktu nyata untuk akses fasilitas dan metrik pengunjung.
@@ -432,7 +622,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Summary cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
             <div className="glass-card p-6 rounded-xl shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div className="w-12 h-12 rounded-xl bg-secondary-container flex items-center justify-center text-on-secondary-container">
@@ -451,9 +641,53 @@ export default function AdminDashboard() {
                 </div>
               </div>
               <p className="font-label-md text-label-md text-on-surface-variant">
-                Total 7 Hari
+                Minggu Ini
               </p>
               <h3 className="font-headline-md text-headline-md mt-1">{weeklyCount}</h3>
+            </div>
+            <div className="glass-card p-6 rounded-xl shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 rounded-xl bg-primary-container flex items-center justify-center text-on-primary-container">
+                  <Icon name="calendar_month" />
+                </div>
+              </div>
+              <p className="font-label-md text-label-md text-on-surface-variant">
+                Bulan Ini
+              </p>
+              <h3 className="font-headline-md text-headline-md mt-1">{monthCount}</h3>
+            </div>
+          </div>
+
+          {/* Chart: kunjungan per hari */}
+          <div className="glass-card rounded-xl p-6 mb-8 shadow-sm">
+            <h4 className="font-headline-md text-headline-md text-on-surface mb-1">
+              Tren Kunjungan Hari Kerja
+            </h4>
+            <p className="font-label-sm text-label-sm text-on-surface-variant mb-6">
+              Kunjungan Senin&ndash;Jumat (5 hari kerja terakhir) untuk memantau hari tersibuk.
+            </p>
+            <div className="flex items-end justify-between gap-3 h-48">
+              {chartData.map((d) => {
+                const max = Math.max(1, ...chartData.map((c) => c.count))
+                const heightPct = (d.count / max) * 100
+                return (
+                  <div key={d.label} className="flex-1 flex flex-col items-center gap-2">
+                    <span className="font-label-sm text-label-sm text-on-surface font-bold">
+                      {d.count}
+                    </span>
+                    <div className="w-full flex items-end" style={{ height: '150px' }}>
+                      <div
+                        className="w-full rounded-t-lg bg-secondary transition-all"
+                        style={{ height: `${heightPct}%`, minHeight: d.count > 0 ? '6px' : '0' }}
+                        title={`${d.label}: ${d.count} pengunjung`}
+                      />
+                    </div>
+                    <span className="font-label-sm text-label-sm text-on-surface-variant text-center">
+                      {d.label}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -668,6 +902,218 @@ export default function AdminDashboard() {
             </div>
           </div>
           </>
+          )}
+
+          {tab === 'pegawai' && (
+            <>
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+                <div>
+                  <h2 className="font-headline-lg text-headline-lg text-primary tracking-tight">
+                    Data Pegawai
+                  </h2>
+                  <p className="font-body-md text-body-md text-on-surface-variant">
+                    Kelola daftar pegawai yang dapat dipilih sebagai tujuan kunjungan.
+                  </p>
+                </div>
+              </div>
+
+              <div className="glass-card rounded-xl p-6 mb-8 shadow-sm">
+                <h4 className="font-headline-md text-headline-md text-on-surface mb-4">
+                  Tambah Pegawai
+                </h4>
+                <form onSubmit={addEmployee} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block font-label-md text-label-md text-on-surface mb-1">Nama Lengkap</label>
+                    <input
+                      value={empForm.fullName}
+                      onChange={(e) => setEmpForm((f) => ({ ...f, fullName: e.target.value }))}
+                      className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
+                      placeholder="Nama pegawai"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-label-md text-label-md text-on-surface mb-1">Jabatan</label>
+                    <input
+                      value={empForm.position}
+                      onChange={(e) => setEmpForm((f) => ({ ...f, position: e.target.value }))}
+                      className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
+                      placeholder="Jabatan / Posisi"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      type="submit"
+                      disabled={savingEmp}
+                      className="w-full bg-secondary text-on-primary px-4 py-2.5 rounded-lg font-label-md hover:opacity-90 transition-all disabled:opacity-60"
+                    >
+                      {savingEmp ? 'Menyimpan...' : 'Tambah Pegawai'}
+                    </button>
+                  </div>
+                </form>
+                {empError && (
+                  <p className="mt-3 text-label-sm text-on-error-container bg-error-container px-3 py-2 rounded-lg">
+                    {empError}
+                  </p>
+                )}
+              </div>
+
+              <div className="glass-card rounded-xl overflow-hidden shadow-sm">
+                <div className="px-6 py-4 border-b border-outline-variant">
+                  <h4 className="font-headline-md text-headline-md text-on-surface">
+                    Daftar Pegawai ({employees.length})
+                  </h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-surface-container-low">
+                      <tr>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Nama Pegawai</th>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Jabatan</th>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/50">
+                      {employees.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-6 py-8 text-center text-on-surface-variant">
+                            Belum ada data pegawai.
+                          </td>
+                        </tr>
+                      )}
+                      {employees.map((emp) => (
+                        <tr key={emp.id} className="hover:bg-surface-container-low transition-colors">
+                          <td className="px-6 py-4 font-label-md text-label-md font-bold text-on-surface">{emp.full_name}</td>
+                          <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">{emp.position || '-'}</td>
+                          <td className="px-6 py-4 text-right">
+                            <button
+                              onClick={() => deleteEmployee(emp.id)}
+                              className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error-container hover:text-on-error-container transition-all"
+                              title="Hapus"
+                            >
+                              <Icon name="delete" className="text-[18px]" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+
+          {tab === 'admin' && (
+            <>
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+                <div>
+                  <h2 className="font-headline-lg text-headline-lg text-primary tracking-tight">
+                    Kelola Admin
+                  </h2>
+                  <p className="font-body-md text-body-md text-on-surface-variant">
+                    Tambah akun admin dan atur peran akses dashboard.
+                  </p>
+                </div>
+              </div>
+
+              <div className="glass-card rounded-xl p-6 mb-8 shadow-sm">
+                <h4 className="font-headline-md text-headline-md text-on-surface mb-4">
+                  Tambah Admin Baru
+                </h4>
+                <form onSubmit={addAdmin} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block font-label-md text-label-md text-on-surface mb-1">Nama Lengkap</label>
+                    <input
+                      value={adminForm.fullName}
+                      onChange={(e) => setAdminForm((f) => ({ ...f, fullName: e.target.value }))}
+                      className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
+                      placeholder="Nama admin"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-label-md text-label-md text-on-surface mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={adminForm.email}
+                      onChange={(e) => setAdminForm((f) => ({ ...f, email: e.target.value }))}
+                      className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
+                      placeholder="admin@email.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-label-md text-label-md text-on-surface mb-1">Kata Sandi</label>
+                    <input
+                      type="password"
+                      value={adminForm.password}
+                      onChange={(e) => setAdminForm((f) => ({ ...f, password: e.target.value }))}
+                      className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
+                      placeholder="Minimal 6 karakter"
+                    />
+                  </div>
+                  <div className="md:col-span-3 flex items-end">
+                    <button
+                      type="submit"
+                      disabled={savingAdmin}
+                      className="bg-secondary text-on-primary px-4 py-2.5 rounded-lg font-label-md hover:opacity-90 transition-all disabled:opacity-60"
+                    >
+                      {savingAdmin ? 'Membuat...' : 'Tambah Admin'}
+                    </button>
+                  </div>
+                </form>
+                {adminError && (
+                  <p className="mt-3 text-label-sm text-on-error-container bg-error-container px-3 py-2 rounded-lg">
+                    {adminError}
+                  </p>
+                )}
+              </div>
+
+              <div className="glass-card rounded-xl overflow-hidden shadow-sm">
+                <div className="px-6 py-4 border-b border-outline-variant">
+                  <h4 className="font-headline-md text-headline-md text-on-surface">
+                    Daftar Admin ({admins.length})
+                  </h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-surface-container-low">
+                      <tr>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Nama</th>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Email</th>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">Peran</th>
+                        <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/50">
+                      {admins.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-8 text-center text-on-surface-variant">
+                            Belum ada data admin.
+                          </td>
+                        </tr>
+                      )}
+                      {admins.map((a) => (
+                        <tr key={a.id} className="hover:bg-surface-container-low transition-colors">
+                          <td className="px-6 py-4 font-label-md text-label-md font-bold text-on-surface">{a.full_name || '-'}</td>
+                          <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">{a.email || '-'}</td>
+                          <td className="px-6 py-4">
+                            <span className={`font-label-sm text-label-sm px-3 py-1 rounded-full ${a.role === 'admin' ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                              {a.role === 'admin' ? 'Admin' : 'Staff'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button
+                              onClick={() => toggleAdminRole(a.id, a.role)}
+                              className="font-label-sm text-label-sm text-secondary underline hover:opacity-80"
+                            >
+                              {a.role === 'admin' ? 'Jadikan Staff' : 'Jadikan Admin'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
           )}
 
           {tab === 'pengaturan' && (
