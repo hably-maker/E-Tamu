@@ -7,7 +7,6 @@ import Footer from './components/Footer.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import AdminLogin from './pages/AdminLogin.jsx'
 import RegistrationForm from './pages/RegistrationForm.jsx'
-import TvDisplay from './pages/TvDisplay.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
 
 export default function App() {
@@ -48,7 +47,6 @@ export default function App() {
         />
         <Route path="/login" element={<AdminLogin />} />
         <Route path="/pengunjung" element={<RegistrationForm />} />
-        <Route path="/tv" element={<TvDisplay />} />
         <Route
           path="/admin"
           element={

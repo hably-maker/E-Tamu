@@ -1,16 +1,38 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useSiteSettings } from '../hooks/useSiteSettings.js'
+import Icon from './Icon.jsx'
 
 const navLinks = [
   { label: 'Beranda', to: '/' },
   { label: 'Pengunjung', to: '/pengunjung' }
 ]
 
+function useClock() {
+  const [now, setNow] = useState(new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  const time = now.toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+  const date = now.toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  })
+  return { time, date }
+}
+
 export default function SiteNavBar() {
   const [scrolled, setScrolled] = useState(false)
   const { pathname } = useLocation()
   const { settings } = useSiteSettings()
+  const { time, date } = useClock()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
@@ -24,7 +46,7 @@ export default function SiteNavBar() {
   return (
     <header
       id="main-nav"
-      className={`fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop h-16 border-b border-outline-variant shadow-sm transition-all ${
+      className={`fixed top-0 w-full z-50 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 border-b border-outline-variant shadow-sm transition-all ${
         scrolled ? 'shadow-lg bg-white/95 backdrop-blur-md' : 'bg-surface'
       }`}
     >
@@ -55,19 +77,12 @@ export default function SiteNavBar() {
         </nav>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="flex gap-2">
-          <button className="material-symbols-outlined text-on-surface-variant p-2 hover:bg-surface-container-high rounded-full transition-all">
-            notifications
-          </button>
-          <button className="material-symbols-outlined text-on-surface-variant p-2 hover:bg-surface-container-high rounded-full transition-all">
-            account_circle
-          </button>
-        </div>
+      <div className="flex items-center">
         <Link
           to="/login"
-          className="hidden md:block bg-secondary text-on-primary px-4 py-2 rounded-lg font-label-md hover:opacity-90 active:scale-95 transition-all"
+          className="bg-secondary text-on-primary px-4 py-2 rounded-lg font-label-md hover:opacity-90 active:scale-95 transition-all flex items-center gap-2"
         >
+          <Icon name="login" className="text-[18px]" />
           Login Admin
         </Link>
       </div>
