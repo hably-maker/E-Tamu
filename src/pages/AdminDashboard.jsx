@@ -312,6 +312,30 @@ export default function AdminDashboard() {
     }
   }
 
+  const moveEmployee = async (id, direction) => {
+    const sort = (a, b) => (a?.sort_order ?? 0) - (b?.sort_order ?? 0)
+    const sorted = [...employees].sort(sort)
+    const idx = sorted.findIndex((e) => e.id === id)
+    const swapIdx = idx + direction
+    if (idx === -1 || swapIdx < 0 || swapIdx >= sorted.length) return
+    const current = sorted[idx]
+    const neighbour = sorted[swapIdx]
+    try {
+      const { error: e1 } = await supabase
+        .from('employees')
+        .update({ sort_order: neighbour.sort_order })
+        .eq('id', current.id)
+      const { error: e2 } = await supabase
+        .from('employees')
+        .update({ sort_order: current.sort_order })
+        .eq('id', neighbour.id)
+      if (e1 || e2) throw e1 || e2
+      loadEmployees()
+    } catch (err) {
+      alert(err.message || 'Gagal mengubah urutan.')
+    }
+  }
+
   // Admin management
   const [admins, setAdmins] = useState([])
   const [adminForm, setAdminForm] = useState({ fullName: '', email: '', password: '' })
@@ -368,8 +392,9 @@ export default function AdminDashboard() {
   const loadEmployees = async () => {
     const { data, error } = await supabase
       .from('employees')
-      .select('id, full_name, rank, position')
-      .order('full_name')
+      .select('id, full_name, rank, position, sort_order')
+      .order('sort_order', { ascending: true })
+      .order('full_name', { ascending: true })
     if (error) console.warn('Gagal memuat pegawai:', error.message)
     if (data) setEmployees(data)
   }
@@ -1148,6 +1173,22 @@ export default function AdminDashboard() {
                           <td className="px-6 py-4 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <button
+                                onClick={() => moveEmployee(emp.id, -1)}
+                                disabled={empPage === 1 && employees.indexOf(emp) === 0}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all disabled:opacity-40"
+                                title="Pindah ke atas"
+                              >
+                                <Icon name="arrow_upward" className="text-[18px]" />
+                              </button>
+                              <button
+                                onClick={() => moveEmployee(emp.id, 1)}
+                                disabled={empPage === Math.ceil(employees.length / EMP_PAGE_SIZE) && employees.indexOf(emp) === employees.length - 1}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all disabled:opacity-40"
+                                title="Pindah ke bawah"
+                              >
+                                <Icon name="arrow_downward" className="text-[18px]" />
+                              </button>
+                              <button
                                 onClick={() => openEditEmp(emp)}
                                 className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-secondary transition-all"
                                 title="Edit"
@@ -1156,13 +1197,13 @@ export default function AdminDashboard() {
                               </button>
                               <button
                                 onClick={() => deleteEmployee(emp.id)}
-                                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error-container hover:text-on-error-container transition-all"
-                                title="Hapus"
-                              >
-                                <Icon name="delete" className="text-[18px]" />
-                              </button>
-                            </div>
-                          </td>
+                              className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error-container hover:text-on-error-container transition-all"
+                              title="Hapus"
+                            >
+                              <Icon name="delete" className="text-[18px]" />
+                            </button>
+                          </div>
+                        </td>
                         </tr>
                       ))}
                     </tbody>

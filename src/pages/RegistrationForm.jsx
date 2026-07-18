@@ -44,7 +44,7 @@ export default function RegistrationForm() {
 
   const destMatches = useMemo(() => {
     const q = destInput.trim().toLowerCase()
-    if (!q) return []
+    if (q.length < 2) return []
     return employees
       .filter((e) => {
         const name = (e.full_name || '').toLowerCase()
@@ -259,13 +259,13 @@ export default function RegistrationForm() {
                         setDestOther(false)
                         setDestOpen(true)
                       }}
-                      onFocus={() => { if (destInput.trim()) setDestOpen(true) }}
+                      onFocus={() => { if (destInput.trim().length >= 2) setDestOpen(true) }}
                       className={inputClass}
                       placeholder="Ketik nama pegawai..."
                       type="text"
                       autoComplete="off"
                     />
-                    {destOpen && destInput.trim() && (
+                    {destOpen && destInput.trim().length >= 2 && (
                       <div className="absolute z-20 mt-1 w-full bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg max-h-60 overflow-y-auto">
                         {destMatches.length === 0 && (
                           <div className="px-4 py-3 text-label-md text-on-surface-variant">
