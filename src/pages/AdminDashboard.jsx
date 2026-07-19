@@ -602,7 +602,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="bg-surface text-on-surface min-h-screen flex">
+    <div className="bg-surface text-on-surface h-screen flex overflow-hidden">
       {/* Overlay for mobile sidebar */}
       {sidebarOpen && (
         <div
@@ -613,7 +613,7 @@ export default function AdminDashboard() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 h-full z-[60] bg-surface-container-lowest border-r border-outline-variant w-64 flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static lg:z-40 ${
+        className={`fixed left-0 top-0 h-full z-[60] bg-surface-container-lowest border-r border-outline-variant w-64 flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static lg:z-40 lg:h-screen lg:sticky lg:top-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -726,7 +726,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden">
         <header className="fixed top-0 right-0 left-0 lg:left-64 h-16 z-50">
           <div className="h-full bg-surface border-b border-outline-variant shadow-sm flex justify-between items-center px-4 md:px-6 lg:px-margin-desktop">
             <div className="flex items-center gap-3">
@@ -787,7 +787,7 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        <main className="pt-20 pb-12 px-6 lg:px-margin-desktop min-h-screen">
+        <main className="pt-20 pb-12 px-6 lg:px-margin-desktop min-h-screen overflow-y-auto flex-1">
           {tab === 'dasbor' && (
             <>
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
