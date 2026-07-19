@@ -38,7 +38,7 @@ export default function App() {
         <Route
           path="/"
           element={
-            <main className="pt-16">
+            <main className="pt-16 flex-1">
               <Hero />
               <FeaturesGrid />
               <Footer />

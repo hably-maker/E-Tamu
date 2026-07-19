@@ -1,6 +1,7 @@
 const PURPOSE_LABELS = {
   business: 'Pertemuan Bisnis',
-  delivery: 'Pengiriman / Kurir',
+  delivery: 'Pengiriman Berkas Perkara',
+  letter_delivery: 'Pengiriman Surat',
   maintenance: 'Pemeliharaan / Dukungan',
   personal: 'Kunjungan Pribadi',
   interview: 'Wawancara Kerja'

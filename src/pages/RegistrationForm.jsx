@@ -6,7 +6,8 @@ import { useSiteSettings } from '../hooks/useSiteSettings.js'
 
 const PURPOSE_OPTIONS = [
   { value: 'business', label: 'Pertemuan Bisnis' },
-  { value: 'delivery', label: 'Pengiriman / Kurir' },
+  { value: 'delivery', label: 'Pengiriman Berkas Perkara' },
+  { value: 'letter_delivery', label: 'Pengiriman Surat' },
   { value: 'maintenance', label: 'Pemeliharaan / Dukungan' },
   { value: 'personal', label: 'Kunjungan Pribadi' },
   { value: 'interview', label: 'Wawancara Kerja' },
@@ -145,7 +146,7 @@ export default function RegistrationForm() {
     <div className="bg-surface text-on-surface min-h-screen flex flex-col">
       <SiteNavBar />
 
-      <main className="flex-grow pt-32 pb-xl px-margin-mobile md:px-margin-desktop bg-surface">
+      <main className="pt-32 pb-xl px-margin-mobile md:px-margin-desktop bg-surface">
         <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-gutter">
           {/* Left: context image */}
           <div className="lg:col-span-5 hidden lg:flex flex-col justify-center">
@@ -161,7 +162,7 @@ export default function RegistrationForm() {
                 </h2>
                 <p className="font-body-md text-body-md text-surface-variant opacity-90">
                   Buku tamu digital kami memastikan setiap entri dilacak dan
-                  diverifikasi untuk keamanan dan kepatuhan perusahaan Anda.
+                  diverifikasi untuk keamanan sesuai kebijakan Pengadilan Militer Utama.
                 </p>
               </div>
             </div>
@@ -383,14 +384,16 @@ export default function RegistrationForm() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full py-lg px-margin-mobile md:px-margin-desktop flex flex-col md:flex-row justify-between items-center gap-md bg-inverse-surface border-t border-outline">
-        <div className="flex flex-col gap-xs items-center md:items-start text-center md:text-left">
-          <span className="font-headline-lg text-headline-lg text-on-primary">E-Tamu</span>
-          <p className="font-body-md text-body-md text-surface-variant max-w-sm">
-            © 2024 Sistem Buku Tamu Digital. Keamanan Kelas Perusahaan.
+      <footer className="w-full py-6 px-6 md:px-8 flex flex-col md:flex-row justify-between items-center gap-md bg-inverse-surface border-t border-outline">
+        <div className="flex flex-col gap-1 items-center md:items-start">
+          <span className="font-headline-lg text-headline-lg text-on-primary">
+            E-Tamu
+          </span>
+          <p className="font-body-md text-body-md text-surface-variant text-center md:text-left">
+            © 2026 Sistem Buku Tamu Digital.
           </p>
         </div>
-        <div className="flex flex-wrap justify-center gap-md">
+        <div className="flex flex-wrap justify-center items-center gap-8">
           <a className="font-label-sm text-label-sm text-surface-variant hover:text-secondary-container underline transition-all" href="#">
             Kebijakan Privasi
           </a>
@@ -398,10 +401,13 @@ export default function RegistrationForm() {
             Ketentuan Layanan
           </a>
           <a className="font-label-sm text-label-sm text-surface-variant hover:text-secondary-container underline transition-all" href="#">
-            Dokumen Keamanan
+            Hubungi Admin
           </a>
           <a className="font-label-sm text-label-sm text-surface-variant hover:text-secondary-container underline transition-all" href="#">
-            Hubungi Dukungan
+            Support
+          </a>
+          <a href="https://www.miltama.dilmiltama.go.id/" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-surface-variant/10 flex items-center justify-center text-on-primary hover:bg-secondary transition-all">
+            <Icon name="public" />
           </a>
         </div>
       </footer>

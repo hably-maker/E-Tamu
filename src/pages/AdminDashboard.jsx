@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../hooks/useAuth.js'
 import { useSiteSettings } from '../hooks/useSiteSettings.js'
@@ -18,7 +18,8 @@ function initials(name = '') {
 
 const PURPOSE_LABELS = {
   business: 'Pertemuan Bisnis',
-  delivery: 'Pengiriman / Kurir',
+  delivery: 'Pengiriman Berkas Perkara',
+  letter_delivery: 'Pengiriman Surat',
   maintenance: 'Pemeliharaan / Dukungan',
   personal: 'Kunjungan Pribadi',
   interview: 'Wawancara Kerja'
@@ -106,6 +107,7 @@ function ImageField({ label, value, onUpload, previewClass }) {
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { profile, signOut } = useAuth()
   const { settings, reload } = useSiteSettings()
   const [tab, setTab] = useState('dasbor') // dasbor | pegawai | admin | pengaturan
@@ -122,15 +124,21 @@ export default function AdminDashboard() {
   const [query, setQuery] = useState('')
   const PAGE_SIZE = 20
   const [page, setPage] = useState(1)
+  const pageRef = useRef(page)
   const [totalVisits, setTotalVisits] = useState(0)
+
+  useEffect(() => {
+    pageRef.current = page
+  }, [page])
 
   useEffect(() => {
     setSettingsLocal(settings)
   }, [settings])
 
-  const loadVisits = async (targetPage = 1) => {
+  async function loadVisits(targetPage) {
+    const pageToLoad = targetPage ?? pageRef.current ?? 1
     setLoading(true)
-    const from = (targetPage - 1) * PAGE_SIZE
+    const from = (pageToLoad - 1) * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
     const { data, error, count } = await supabase
       .from('visits')
@@ -157,13 +165,25 @@ export default function AdminDashboard() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'visits' },
-        () => loadVisits(page)
+        () => loadVisits()
       )
       .subscribe()
 
     return () => supabase.removeChannel(channel)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (location.pathname === '/admin') {
+      setPage(1)
+      loadVisits(1)
+      loadChart()
+      loadEmployees()
+      loadAdmins()
+      loadLogs()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname])
 
   const handleLogout = async () => {
     await signOut()
@@ -211,7 +231,7 @@ export default function AdminDashboard() {
     let added = 0
     let cursor = new Date(now)
     while (added < 5) {
-      const dow = cursor.getDay() // 0 = Minggu, 6 = Sabtu
+      const dow = cursor.getDay()
       if (dow !== 0 && dow !== 6) {
         const d = new Date(cursor)
         d.setHours(0, 0, 0, 0)
@@ -463,7 +483,7 @@ export default function AdminDashboard() {
       if (visitErr) throw visitErr
 
       closeEdit()
-      loadVisits(page)
+      loadVisits()
       logActivity({
         profile,
         action: 'Mengedit Kunjungan',
@@ -486,7 +506,7 @@ export default function AdminDashboard() {
     try {
       const { error } = await supabase.from('visits').delete().eq('id', id)
       if (error) throw error
-      loadVisits(page)
+      loadVisits()
       logActivity({
         profile,
         action: 'Menghapus Kunjungan',
@@ -593,7 +613,7 @@ export default function AdminDashboard() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 h-full z-50 bg-surface-container-lowest border-r border-outline-variant w-64 flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static lg:z-40 ${
+        className={`fixed left-0 top-0 h-full z-[60] bg-surface-container-lowest border-r border-outline-variant w-64 flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static lg:z-40 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -610,9 +630,9 @@ export default function AdminDashboard() {
               <h1 className="font-headline-md text-headline-md font-bold text-on-surface">
                 E-Tamu
               </h1>
-              <p className="font-label-sm text-label-sm text-on-surface-variant opacity-70">
-                Keamanan Kantor
-              </p>
+                <p className="font-label-sm text-label-sm text-on-surface-variant opacity-70">
+                  Buku Tamu Digital
+                </p>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -717,12 +737,18 @@ export default function AdminDashboard() {
               >
                 <Icon name="menu" className="text-[22px]" />
               </button>
-              <h1 className="font-headline-md text-headline-md font-bold text-on-surface lg:hidden">
-                E-Tamu
-              </h1>
+              <Link to="/" className="flex items-center gap-2">
+                {settings.logo_url ? (
+                  <img src={settings.logo_url} alt="E-Tamu" className="h-8 w-8 rounded object-cover" />
+                ) : (
+                  <span className="font-headline-md text-headline-md font-bold text-on-surface">
+                    E-Tamu
+                  </span>
+                )}
+              </Link>
             </div>
-            <div className="hidden md:flex flex-1 max-w-md ml-auto mr-8">
-              <div className="relative w-full">
+            <div className="hidden md:flex flex-1 justify-center px-8">
+              <div className="relative w-full max-w-md">
                 <Icon
                   name="search"
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]"
@@ -1533,7 +1559,8 @@ export default function AdminDashboard() {
                 <label className="block font-label-md text-label-md text-on-surface mb-1">Keperluan</label>
                 <select value={editForm.purpose} onChange={(e) => setEditForm((f) => ({ ...f, purpose: e.target.value }))} className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary">
                   <option value="business">Pertemuan Bisnis</option>
-                  <option value="delivery">Pengiriman / Kurir</option>
+                  <option value="delivery">Pengiriman Berkas Perkara</option>
+                  <option value="letter_delivery">Pengiriman Surat</option>
                   <option value="maintenance">Pemeliharaan / Dukungan</option>
                   <option value="personal">Kunjungan Pribadi</option>
                   <option value="interview">Wawancara Kerja</option>

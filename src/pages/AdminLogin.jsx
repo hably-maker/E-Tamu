@@ -26,7 +26,7 @@ export default function AdminLogin() {
   }
 
   return (
-    <main className="pt-16 min-h-screen flex items-center justify-center px-margin-mobile bg-background">
+    <main className="min-h-screen flex items-center justify-center px-margin-mobile bg-surface">
       <div className="w-full max-w-md bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm p-10">
         <div className="flex items-center gap-3 mb-8">
           <div className="w-12 h-12 bg-secondary text-on-primary rounded-xl flex items-center justify-center">
