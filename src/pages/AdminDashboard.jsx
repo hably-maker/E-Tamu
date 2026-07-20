@@ -617,7 +617,8 @@ export default function AdminDashboard() {
   const todayCount = useMemo(() => {
     const start = new Date()
     start.setHours(0, 0, 0, 0)
-    return visits.filter((v) => new Date(v.check_in_at) >= start).length
+    const startIso = new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString()
+    return visits.filter((v) => new Date(v.check_in_at).toISOString() >= startIso).length
   }, [visits])
 
   const weeklyCount = useMemo(() => {
@@ -626,13 +627,16 @@ export default function AdminDashboard() {
     const monday = new Date(now)
     monday.setDate(now.getDate() - (day - 1))
     monday.setHours(0, 0, 0, 0)
-    return visits.filter((v) => new Date(v.check_in_at) >= monday).length
+    const mondayIso = new Date(monday.getTime() - monday.getTimezoneOffset() * 60000).toISOString()
+    return visits.filter((v) => new Date(v.check_in_at).toISOString() >= mondayIso).length
   }, [visits])
 
   const monthCount = useMemo(() => {
     const now = new Date()
     const start = new Date(now.getFullYear(), now.getMonth(), 1)
-    return visits.filter((v) => new Date(v.check_in_at) >= start).length
+    start.setHours(0, 0, 0, 0)
+    const startIso = new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString()
+    return visits.filter((v) => new Date(v.check_in_at).toISOString() >= startIso).length
   }, [visits])
 
   const filtered = visits.filter((v) => {
