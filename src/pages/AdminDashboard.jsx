@@ -225,6 +225,9 @@ export default function AdminDashboard() {
 
   // Chart: kunjungan per hari kerja (Senin-Jumat), 5 hari kerja terakhir
   const [chartData, setChartData] = useState([])
+  const [weeklyData, setWeeklyData] = useState([])
+  const [monthlyData, setMonthlyData] = useState([])
+  const [chartMode, setChartMode] = useState('daily')
   const loadChart = async () => {
     const days = []
     const now = new Date()
@@ -252,6 +255,56 @@ export default function AdminDashboard() {
     }
     days.reverse()
     setChartData(days)
+  }
+
+  const loadWeeklyChart = async () => {
+    const weeks = []
+    const now = new Date()
+    let cursor = new Date(now)
+    cursor.setDate(now.getDate() - (now.getDay() || 7) + 7)
+    cursor.setHours(23, 59, 59, 999)
+    for (let i = 0; i < 8; i++) {
+      const weekEnd = new Date(cursor)
+      const weekStart = new Date(cursor)
+      weekStart.setDate(weekEnd.getDate() - 6)
+      weekStart.setHours(0, 0, 0, 0)
+      const { count } = await supabase
+        .from('visits')
+        .select('*', { count: 'exact', head: true })
+        .gte('check_in_at', weekStart.toISOString())
+        .lte('check_in_at', weekEnd.toISOString())
+      weeks.push({
+        label: `${weekStart.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${weekEnd.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`,
+        count: count || 0
+      })
+      cursor.setDate(cursor.getDate() - 7)
+    }
+    weeks.reverse()
+    setWeeklyData(weeks)
+  }
+
+  const loadMonthlyChart = async () => {
+    const months = []
+    const now = new Date()
+    let cursor = new Date(now.getFullYear(), now.getMonth(), 1)
+    cursor.setHours(0, 0, 0, 0)
+    for (let i = 0; i < 6; i++) {
+      const monthStart = new Date(cursor)
+      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0)
+      monthEnd.setHours(23, 59, 59, 999)
+      const { count } = await supabase
+        .from('visits')
+        .select('*', { count: 'exact', head: true })
+        .gte('check_in_at', monthStart.toISOString())
+        .lte('check_in_at', monthEnd.toISOString())
+      months.push({
+        label: monthStart.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+        count: count || 0
+      })
+      cursor.setMonth(cursor.getMonth() - 1)
+    }
+    months.reverse()
+    setMonthlyData(months)
   }
 
   // Employee management
@@ -443,6 +496,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadChart()
+    loadWeeklyChart()
+    loadMonthlyChart()
     loadEmployees()
     loadAdmins()
     loadLogs()
@@ -838,31 +893,66 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Chart: kunjungan per hari */}
-          <div className="glass-card rounded-xl p-6 mb-8 shadow-sm">
-            <h4 className="font-headline-md text-headline-md text-on-surface mb-1">
-              Tren Kunjungan Hari Kerja
-            </h4>
-            <p className="font-label-sm text-label-sm text-on-surface-variant mb-6">
-              Kunjungan Senin&ndash;Jumat (5 hari kerja terakhir) untuk memantau hari tersibuk.
-            </p>
-            <div className="flex items-end justify-between gap-3 h-48">
-              {chartData.map((d) => {
-                const max = Math.max(1, ...chartData.map((c) => c.count))
+          {/* Chart: kunjungan per hari/minggu/bulan */}
+          <div className="glass-card rounded-xl p-6 mb-8 shadow-sm overflow-visible">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <div>
+                <h4 className="font-headline-md text-headline-md text-on-surface mb-1">
+                  {chartMode === 'daily' && 'Tren Kunjungan Hari Kerja'}
+                  {chartMode === 'weekly' && 'Tren Kunjungan Mingguan'}
+                  {chartMode === 'monthly' && 'Tren Kunjungan Bulanan'}
+                </h4>
+                <p className="font-label-sm text-label-sm text-on-surface-variant">
+                  {chartMode === 'daily' && 'Kunjungan Senin&ndash;Jumat (5 hari kerja terakhir) untuk memantau hari tersibuk.'}
+                  {chartMode === 'weekly' && 'Kunjungan per minggu (8 minggu terakhir) untuk memantau tren mingguan.'}
+                  {chartMode === 'monthly' && 'Kunjungan per bulan (6 bulan terakhir) untuk memantau tren bulanan.'}
+                </p>
+              </div>
+              <div className="flex rounded-lg bg-surface-container-low p-1">
+                <button
+                  onClick={() => setChartMode('daily')}
+                  className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
+                    chartMode === 'daily' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Harian
+                </button>
+                <button
+                  onClick={() => setChartMode('weekly')}
+                  className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
+                    chartMode === 'weekly' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Mingguan
+                </button>
+                <button
+                  onClick={() => setChartMode('monthly')}
+                  className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
+                    chartMode === 'monthly' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Bulanan
+                </button>
+              </div>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              {(chartMode === 'daily' ? chartData : chartMode === 'weekly' ? weeklyData : monthlyData).map((d) => {
+                const dataset = chartMode === 'daily' ? chartData : chartMode === 'weekly' ? weeklyData : monthlyData
+                const max = Math.max(1, ...dataset.map((c) => c.count))
                 const heightPct = (d.count / max) * 100
                 return (
-                  <div key={d.label} className="flex-1 flex flex-col items-center gap-2">
-                    <span className="font-label-sm text-label-sm text-on-surface font-bold">
+                  <div key={d.label} className="flex-1 min-w-[64px] flex flex-col items-center gap-1">
+                    <span className="font-label-sm text-label-sm text-on-surface font-bold whitespace-nowrap leading-none mb-1">
                       {d.count}
                     </span>
-                    <div className="w-full flex items-end" style={{ height: '150px' }}>
+                    <div className="w-full flex items-end" style={{ height: '160px' }}>
                       <div
                         className="w-full rounded-t-lg bg-secondary transition-all"
-                        style={{ height: `${heightPct}%`, minHeight: d.count > 0 ? '6px' : '0' }}
+                        style={{ height: `${heightPct}%`, minHeight: d.count > 0 ? '8px' : '0' }}
                         title={`${d.label}: ${d.count} pengunjung`}
                       />
                     </div>
-                    <span className="font-label-sm text-label-sm text-on-surface-variant text-center">
+                    <span className="font-label-sm text-label-sm text-on-surface-variant text-center whitespace-nowrap truncate w-full leading-tight mt-1">
                       {d.label}
                     </span>
                   </div>
