@@ -143,7 +143,7 @@ export default function AdminDashboard() {
     const { data, error, count } = await supabase
       .from('visits')
       .select(
-        'id, purpose, remarks, status, check_in_at, check_out_at, qr_code, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, position)',
+        'id, purpose, remarks, status, check_in_at, check_out_at, qr_code, visitor(id, full_name, phone, organization, photo_url), employee(id, full_name, position)',
         { count: 'exact' }
       )
       .order('check_in_at', { ascending: false })
@@ -151,6 +151,8 @@ export default function AdminDashboard() {
     if (!error) {
       setVisits(data || [])
       if (typeof count === 'number') setTotalVisits(count)
+    } else {
+      console.error('loadVisits error:', error)
     }
     setLoading(false)
   }
@@ -165,11 +167,23 @@ export default function AdminDashboard() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'visits' },
-        () => loadVisits()
+        (payload) => {
+          loadVisits()
+        }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+        }
+      })
 
-    return () => supabase.removeChannel(channel)
+    const interval = setInterval(() => {
+      loadVisits()
+    }, 30000)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(interval)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -580,7 +594,7 @@ export default function AdminDashboard() {
     let q = supabase
       .from('visits')
       .select(
-        'id, purpose, remarks, status, check_in_at, check_out_at, visitors(id, full_name, phone), employees(id, full_name, position)'
+        'id, purpose, remarks, status, check_in_at, check_out_at, visitor(id, full_name, phone), employee(id, full_name, position)'
       )
 
     if (exportMode === 'range' && rangeStart && rangeEnd) {

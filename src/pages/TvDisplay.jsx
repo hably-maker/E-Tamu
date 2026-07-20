@@ -61,11 +61,12 @@ export default function TvDisplay() {
       const { data, error } = await supabase
         .from('visits')
         .select(
-          'id, check_in_at, visitors(id, full_name), employees(id, full_name, position), departments(id, name)'
+          'id, check_in_at, visitor(id, full_name), employee(id, full_name, position), department(id, name)'
         )
         .order('check_in_at', { ascending: false })
         .limit(12)
       if (!error) setVisits(data || [])
+      else console.error('TvDisplay load error:', error)
     }
     load()
 
