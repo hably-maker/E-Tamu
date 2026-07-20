@@ -71,7 +71,7 @@ export default function Hero() {
           style={{ backgroundImage: `url('${bg}')` }}
         />
       </div>
-      <div className="container mx-auto px-margin-mobile md:px-margin-desktop relative z-10">
+      <div className="container mx-auto px-margin-mobile md:px-margin-desktop relative z-10 flex justify-end">
         <div className="max-w-3xl glass-card p-10 md:p-16 rounded-3xl animate-in fade-in slide-in-from-bottom-8 duration-1000">
           <div className="flex items-center gap-6 mb-6">
             <div className="flex flex-col">
