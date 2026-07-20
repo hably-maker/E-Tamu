@@ -109,18 +109,12 @@ export default function RegistrationForm() {
     setError('')
     setSubmitting(true)
     try {
-      const { data: visitor, error: vErr } = await supabase
-        .from('visitors')
-        .insert({
-          full_name: form.fullName,
-          phone: form.phoneNumber
-        })
-        .select()
-        .single()
+      const { data: visitorId, error: vErr } = await supabase
+        .rpc('register_visitor', { p_full_name: form.fullName, p_phone: form.phoneNumber })
       if (vErr) throw vErr
 
       const { error: visitErr } = await supabase.from('visits').insert({
-        visitor_id: visitor.id,
+        visitor_id: visitorId,
         employee_id: destEmployeeId || null,
         destination_text: destOther ? destOtherText.trim() || null : null,
         purpose: form.purpose === 'other' ? form.otherPurpose : form.purpose,
@@ -136,7 +130,13 @@ export default function RegistrationForm() {
       setShowToast(true)
       toastTimer.current = setTimeout(() => setShowToast(false), 5000)
     } catch (err) {
-      setError(err.message || 'Gagal menyimpan registrasi.')
+      const detail = [
+        err.message || 'Gagal menyimpan registrasi.',
+        err.code ? `[code: ${err.code}]` : '',
+        err.details ? `[details: ${err.details}]` : '',
+        err.hint ? `[hint: ${err.hint}]` : ''
+      ].filter(Boolean).join(' ')
+      setError(detail)
     } finally {
       setSubmitting(false)
     }
