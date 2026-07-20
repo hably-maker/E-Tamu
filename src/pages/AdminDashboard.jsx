@@ -108,7 +108,7 @@ function ImageField({ label, value, onUpload, previewClass }) {
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { profile, signOut } = useAuth()
+  const { session, profile, signOut, loading: authLoading } = useAuth()
   const { settings, reload } = useSiteSettings()
   const [tab, setTab] = useState('dasbor') // dasbor | pegawai | admin | pengaturan
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -120,6 +120,7 @@ export default function AdminDashboard() {
   const [savingSettings, setSavingSettings] = useState(false)
   const [visits, setVisits] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [employeeFilter, setEmployeeFilter] = useState('all')
   const [query, setQuery] = useState('')
   const PAGE_SIZE = 20
@@ -151,8 +152,15 @@ export default function AdminDashboard() {
     if (!error) {
       setVisits(data || [])
       if (typeof count === 'number') setTotalVisits(count)
+      setLoadError('')
     } else {
-      console.error('loadVisits error:', error)
+      const msg = [
+        error.message || 'Gagal memuat data kunjungan.',
+        error.code ? `[code: ${error.code}]` : '',
+        error.details ? `[details: ${error.details}]` : '',
+        error.hint ? `[hint: ${error.hint}]` : ''
+      ].filter(Boolean).join(' ')
+      setLoadError(msg)
     }
     setLoading(false)
   }
@@ -160,7 +168,22 @@ export default function AdminDashboard() {
   const totalPages = Math.max(1, Math.ceil(totalVisits / PAGE_SIZE))
 
   useEffect(() => {
+    if (authLoading) return
+    if (!session) {
+      navigate('/login')
+      return
+    }
+    if (session && !profile) return
+    if (profile?.role !== 'admin') {
+      navigate('/')
+      return
+    }
+
     loadVisits(1)
+    loadChart()
+    loadEmployees()
+    loadAdmins()
+    loadLogs()
 
     const channel = supabase
       .channel('visits-changes')
@@ -185,16 +208,12 @@ export default function AdminDashboard() {
       clearInterval(interval)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [profile, authLoading, session])
 
   useEffect(() => {
-    if (location.pathname === '/admin') {
+    if (location.pathname === '/admin' && profile?.role === 'admin') {
       setPage(1)
       loadVisits(1)
-      loadChart()
-      loadEmployees()
-      loadAdmins()
-      loadLogs()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname])
@@ -666,10 +685,40 @@ export default function AdminDashboard() {
     return true
   })
 
+  if (authLoading || (!profile && session)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface text-on-surface-variant">
+        Memuat dasbor...
+      </div>
+    )
+  }
+
+  if (!profile || profile.role !== 'admin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface text-on-surface-variant">
+        <div className="text-center">
+          <p className="font-headline-md text-headline-md mb-2">Akses Ditolak</p>
+          <p className="font-body-md text-body-md">Anda tidak memiliki hak untuk mengakses halaman ini.</p>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface text-on-surface-variant">
         Memuat dasbor...
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface text-on-surface-variant">
+        <div className="text-center">
+          <p className="font-headline-md text-headline-md text-error mb-2">Gagal memuat data</p>
+          <p className="font-body-md text-body-md">{loadError}</p>
+        </div>
       </div>
     )
   }
