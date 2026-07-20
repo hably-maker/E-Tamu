@@ -143,7 +143,7 @@ export default function AdminDashboard() {
     const { data, error, count } = await supabase
       .from('visits')
       .select(
-        'id, purpose, remarks, status, check_in_at, check_out_at, qr_code, visitor(id, full_name, phone, organization, photo_url), employee(id, full_name, position)',
+        'id, purpose, remarks, status, check_in_at, check_out_at, qr_code, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, position)',
         { count: 'exact' }
       )
       .order('check_in_at', { ascending: false })
@@ -594,7 +594,7 @@ export default function AdminDashboard() {
     let q = supabase
       .from('visits')
       .select(
-        'id, purpose, remarks, status, check_in_at, check_out_at, visitor(id, full_name, phone), employee(id, full_name, position)'
+        'id, purpose, remarks, status, check_in_at, check_out_at, visitors(id, full_name, phone), employees(id, full_name, position)'
       )
 
     if (exportMode === 'range' && rangeStart && rangeEnd) {

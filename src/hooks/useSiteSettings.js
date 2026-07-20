@@ -31,10 +31,11 @@ export function useSiteSettings() {
 
   useEffect(() => {
     load()
+    const channelName = `site-settings-${Math.random().toString(36).slice(2, 9)}`
     let channel
     try {
       channel = supabase
-        .channel('site-settings-changes')
+        .channel(channelName)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'site_settings' },
