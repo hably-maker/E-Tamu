@@ -127,6 +127,7 @@ export default function AdminDashboard() {
   const [page, setPage] = useState(1)
   const pageRef = useRef(page)
   const [totalVisits, setTotalVisits] = useState(0)
+  const mountedRef = useRef(false)
 
   useEffect(() => {
     pageRef.current = page
@@ -138,7 +139,6 @@ export default function AdminDashboard() {
 
   async function loadVisits(targetPage) {
     const pageToLoad = targetPage ?? pageRef.current ?? 1
-    setLoading(true)
     const from = (pageToLoad - 1) * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
     const { data, error, count } = await supabase
@@ -162,36 +162,25 @@ export default function AdminDashboard() {
       ].filter(Boolean).join(' ')
       setLoadError(msg)
     }
-    setLoading(false)
+    if (!mountedRef.current) {
+      mountedRef.current = true
+      setLoading(false)
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(totalVisits / PAGE_SIZE))
 
   useEffect(() => {
-    if (authLoading) return
-    if (!session) {
-      navigate('/login')
-      return
-    }
-    if (session && !profile) return
-    if (profile?.role !== 'admin') {
-      navigate('/')
-      return
-    }
-
     loadVisits(1)
-    loadChart()
-    loadEmployees()
-    loadAdmins()
-    loadLogs()
 
     const channel = supabase
       .channel('visits-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'visits' },
-        (payload) => {
+        () => {
           loadVisits()
+          loadChart()
         }
       )
       .subscribe((status) => {
@@ -201,19 +190,24 @@ export default function AdminDashboard() {
 
     const interval = setInterval(() => {
       loadVisits()
-    }, 30000)
+      loadChart()
+    }, 10000)
 
     return () => {
       supabase.removeChannel(channel)
       clearInterval(interval)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile, authLoading, session])
+  }, [])
 
   useEffect(() => {
-    if (location.pathname === '/admin' && profile?.role === 'admin') {
+    if (location.pathname === '/admin') {
       setPage(1)
       loadVisits(1)
+      loadChart()
+      loadEmployees()
+      loadAdmins()
+      loadLogs()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname])
@@ -572,6 +566,7 @@ export default function AdminDashboard() {
 
       closeEdit()
       loadVisits()
+      loadChart()
       logActivity({
         profile,
         action: 'Mengedit Kunjungan',
@@ -595,6 +590,7 @@ export default function AdminDashboard() {
       const { error } = await supabase.from('visits').delete().eq('id', id)
       if (error) throw error
       loadVisits()
+      loadChart()
       logActivity({
         profile,
         action: 'Menghapus Kunjungan',
@@ -685,7 +681,7 @@ export default function AdminDashboard() {
     return true
   })
 
-  if (authLoading || (!profile && session)) {
+  if (authLoading || (session && !profile)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface text-on-surface-variant">
         Memuat dasbor...
@@ -704,7 +700,7 @@ export default function AdminDashboard() {
     )
   }
 
-  if (loading) {
+  if (loading && !mountedRef.current) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface text-on-surface-variant">
         Memuat dasbor...
@@ -1002,20 +998,20 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </div>
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-center gap-1">
               {(chartMode === 'daily' ? chartData : chartMode === 'weekly' ? weeklyData : monthlyData).map((d) => {
                 const dataset = chartMode === 'daily' ? chartData : chartMode === 'weekly' ? weeklyData : monthlyData
                 const max = Math.max(1, ...dataset.map((c) => c.count))
                 const heightPct = (d.count / max) * 100
                 return (
-                  <div key={d.label} className="flex-1 min-w-[64px] flex flex-col items-center gap-1">
+                  <div key={d.label} className="flex-1 min-w-[32px] flex flex-col items-center gap-1">
                     <span className="font-label-sm text-label-sm text-on-surface font-bold whitespace-nowrap leading-none mb-1">
                       {d.count}
                     </span>
-                    <div className="w-full flex items-end" style={{ height: '160px' }}>
+                    <div className="w-full flex items-end justify-center" style={{ height: '140px' }}>
                       <div
-                        className="w-full rounded-t-lg bg-secondary transition-all"
-                        style={{ height: `${heightPct}%`, minHeight: d.count > 0 ? '8px' : '0' }}
+                        className="w-3/4 rounded-t-lg bg-secondary transition-all"
+                        style={{ height: `${heightPct}%`, minHeight: d.count > 0 ? '6px' : '0' }}
                         title={`${d.label}: ${d.count} pengunjung`}
                       />
                     </div>
