@@ -193,7 +193,7 @@ export default function AdminDashboard() {
       loadVisits()
       if (chartMode === 'weekly') loadWeeklyChart()
       else loadMonthlyChart()
-    }, 10000)
+    }, 30000)
 
     return () => {
       supabase.removeChannel(channel)
@@ -257,6 +257,11 @@ export default function AdminDashboard() {
   const [weeklyData, setWeeklyData] = useState([])
   const [monthlyData, setMonthlyData] = useState([])
   const [chartMode, setChartMode] = useState('weekly')
+
+  useEffect(() => {
+    if (chartMode === 'weekly') loadWeeklyChart()
+    else loadMonthlyChart()
+  }, [chartMode])
   const loadWeeklyChart = async () => {
     const days = []
     const now = new Date()
@@ -648,18 +653,20 @@ export default function AdminDashboard() {
     return visits.filter((v) => new Date(v.check_in_at).toISOString() >= startIso).length
   }, [visits])
 
-  const filtered = visits.filter((v) => {
-    if (employeeFilter !== 'all' && v.employee_id !== employeeFilter) return false
-    if (query) {
-      const q = query.toLowerCase()
-      const name = v.visitors?.full_name?.toLowerCase() || ''
-      const org = v.visitors?.organization?.toLowerCase() || ''
-      const phone = v.visitors?.phone?.toLowerCase() || ''
-      const host = v.employees?.full_name?.toLowerCase() || ''
-      if (!name.includes(q) && !org.includes(q) && !phone.includes(q) && !host.includes(q)) return false
-    }
-    return true
-  })
+  const filtered = useMemo(() => {
+    return visits.filter((v) => {
+      if (employeeFilter !== 'all' && v.employee_id !== employeeFilter) return false
+      if (query) {
+        const q = query.toLowerCase()
+        const name = v.visitors?.full_name?.toLowerCase() || ''
+        const org = v.visitors?.organization?.toLowerCase() || ''
+        const phone = v.visitors?.phone?.toLowerCase() || ''
+        const host = v.employees?.full_name?.toLowerCase() || ''
+        if (!name.includes(q) && !org.includes(q) && !phone.includes(q) && !host.includes(q)) return false
+      }
+      return true
+    })
+  }, [visits, employeeFilter, query])
 
   if (authLoading || (session && !profile)) {
     return (
