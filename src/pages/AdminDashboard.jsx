@@ -180,7 +180,8 @@ export default function AdminDashboard() {
         { event: '*', schema: 'public', table: 'visits' },
         () => {
           loadVisits()
-          loadChart()
+          if (chartMode === 'weekly') loadWeeklyChart()
+          else loadMonthlyChart()
         }
       )
       .subscribe((status) => {
@@ -190,7 +191,8 @@ export default function AdminDashboard() {
 
     const interval = setInterval(() => {
       loadVisits()
-      loadChart()
+      if (chartMode === 'weekly') loadWeeklyChart()
+      else loadMonthlyChart()
     }, 10000)
 
     return () => {
@@ -203,11 +205,12 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (location.pathname === '/admin') {
       setPage(1)
-      loadVisits(1)
-      loadChart()
-      loadEmployees()
-      loadAdmins()
-      loadLogs()
+    loadVisits(1)
+    loadWeeklyChart()
+    loadMonthlyChart()
+    loadEmployees()
+    loadAdmins()
+    loadLogs()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname])
@@ -250,12 +253,11 @@ export default function AdminDashboard() {
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
 
-  // Chart: kunjungan per hari kerja (Senin-Jumat), 5 hari kerja terakhir
-  const [chartData, setChartData] = useState([])
+  // Chart: kunjungan per hari kerja (Senin-Jumat)
   const [weeklyData, setWeeklyData] = useState([])
   const [monthlyData, setMonthlyData] = useState([])
-  const [chartMode, setChartMode] = useState('daily')
-  const loadChart = async () => {
+  const [chartMode, setChartMode] = useState('weekly')
+  const loadWeeklyChart = async () => {
     const days = []
     const now = new Date()
     let added = 0
@@ -281,57 +283,34 @@ export default function AdminDashboard() {
       cursor.setDate(cursor.getDate() - 1)
     }
     days.reverse()
-    setChartData(days)
-  }
-
-  const loadWeeklyChart = async () => {
-    const weeks = []
-    const now = new Date()
-    let cursor = new Date(now)
-    cursor.setDate(now.getDate() - (now.getDay() || 7) + 7)
-    cursor.setHours(23, 59, 59, 999)
-    for (let i = 0; i < 8; i++) {
-      const weekEnd = new Date(cursor)
-      const weekStart = new Date(cursor)
-      weekStart.setDate(weekEnd.getDate() - 6)
-      weekStart.setHours(0, 0, 0, 0)
-      const { count } = await supabase
-        .from('visits')
-        .select('*', { count: 'exact', head: true })
-        .gte('check_in_at', weekStart.toISOString())
-        .lte('check_in_at', weekEnd.toISOString())
-      weeks.push({
-        label: `${weekStart.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${weekEnd.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`,
-        count: count || 0
-      })
-      cursor.setDate(cursor.getDate() - 7)
-    }
-    weeks.reverse()
-    setWeeklyData(weeks)
+    setWeeklyData(days)
   }
 
   const loadMonthlyChart = async () => {
-    const months = []
+    const days = []
     const now = new Date()
-    let cursor = new Date(now.getFullYear(), now.getMonth(), 1)
-    cursor.setHours(0, 0, 0, 0)
-    for (let i = 0; i < 6; i++) {
-      const monthStart = new Date(cursor)
-      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0)
-      monthEnd.setHours(23, 59, 59, 999)
-      const { count } = await supabase
-        .from('visits')
-        .select('*', { count: 'exact', head: true })
-        .gte('check_in_at', monthStart.toISOString())
-        .lte('check_in_at', monthEnd.toISOString())
-      months.push({
-        label: monthStart.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
-        count: count || 0
-      })
-      cursor.setMonth(cursor.getMonth() - 1)
+    const start = new Date(now.getFullYear(), now.getMonth(), 1)
+    let cursor = new Date(start)
+    while (cursor <= now) {
+      const dow = cursor.getDay()
+      if (dow !== 0 && dow !== 6) {
+        const d = new Date(cursor)
+        d.setHours(0, 0, 0, 0)
+        const end = new Date(d)
+        end.setHours(23, 59, 59, 999)
+        const { count } = await supabase
+          .from('visits')
+          .select('*', { count: 'exact', head: true })
+          .gte('check_in_at', d.toISOString())
+          .lte('check_in_at', end.toISOString())
+        days.push({
+          label: d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+          count: count || 0
+        })
+      }
+      cursor.setDate(cursor.getDate() + 1)
     }
-    months.reverse()
-    setMonthlyData(months)
+    setMonthlyData(days)
   }
 
   // Employee management
@@ -522,7 +501,6 @@ export default function AdminDashboard() {
   const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
-    loadChart()
     loadWeeklyChart()
     loadMonthlyChart()
     loadEmployees()
@@ -566,7 +544,8 @@ export default function AdminDashboard() {
 
       closeEdit()
       loadVisits()
-      loadChart()
+      if (chartMode === 'weekly') loadWeeklyChart()
+      else loadMonthlyChart()
       logActivity({
         profile,
         action: 'Mengedit Kunjungan',
@@ -590,7 +569,8 @@ export default function AdminDashboard() {
       const { error } = await supabase.from('visits').delete().eq('id', id)
       if (error) throw error
       loadVisits()
-      loadChart()
+      if (chartMode === 'weekly') loadWeeklyChart()
+      else loadMonthlyChart()
       logActivity({
         profile,
         action: 'Menghapus Kunjungan',
@@ -961,25 +941,15 @@ export default function AdminDashboard() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div>
                 <h4 className="font-headline-md text-headline-md text-on-surface mb-1">
-                  {chartMode === 'daily' && 'Tren Kunjungan Hari Kerja'}
-                  {chartMode === 'weekly' && 'Tren Kunjungan Mingguan'}
-                  {chartMode === 'monthly' && 'Tren Kunjungan Bulanan'}
+                  {chartMode === 'weekly' && 'Tren Kunjungan Mingguan (Hari Kerja)'}
+                  {chartMode === 'monthly' && 'Tren Kunjungan Bulanan (Hari Kerja)'}
                 </h4>
                 <p className="font-label-sm text-label-sm text-on-surface-variant">
-                  {chartMode === 'daily' && 'Kunjungan Senin&ndash;Jumat (5 hari kerja terakhir) untuk memantau hari tersibuk.'}
-                  {chartMode === 'weekly' && 'Kunjungan per minggu (8 minggu terakhir) untuk memantau tren mingguan.'}
-                  {chartMode === 'monthly' && 'Kunjungan per bulan (6 bulan terakhir) untuk memantau tren bulanan.'}
+                  {chartMode === 'weekly' && 'Kunjungan Senin&ndash;Jumat (1 minggu terakhir) untuk memantau tren mingguan.'}
+                  {chartMode === 'monthly' && 'Kunjungan Senin&ndash;Jumat (1 bulan terakhir) untuk memantau tren bulanan.'}
                 </p>
               </div>
               <div className="flex rounded-lg bg-surface-container-low p-1">
-                <button
-                  onClick={() => setChartMode('daily')}
-                  className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
-                    chartMode === 'daily' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-                  }`}
-                >
-                  Harian
-                </button>
                 <button
                   onClick={() => setChartMode('weekly')}
                   className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
@@ -999,8 +969,8 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="flex items-start justify-center gap-1">
-              {(chartMode === 'daily' ? chartData : chartMode === 'weekly' ? weeklyData : monthlyData).map((d) => {
-                const dataset = chartMode === 'daily' ? chartData : chartMode === 'weekly' ? weeklyData : monthlyData
+              {(chartMode === 'weekly' ? weeklyData : monthlyData).map((d) => {
+                const dataset = chartMode === 'weekly' ? weeklyData : monthlyData
                 const max = Math.max(1, ...dataset.map((c) => c.count))
                 const heightPct = (d.count / max) * 100
                 return (
