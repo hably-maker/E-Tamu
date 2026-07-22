@@ -1,15 +1,17 @@
 -- ============================================================
--- E-Tamu — Reset data pengunjung dan kunjungan (dummy data)
--- Hanya menghapus data di tabel visits dan visitors.
--- Data pegawai/admin/pengaturan tidak ikut terhapus.
+-- E-Tamu — Reset data dummy (visits, visitors, activity_logs)
+-- Hanya menghapus data dummy tanpa merusak struktur tabel.
 -- ============================================================
 
 BEGIN;
 
--- Hapus data kunjungan terlebih dahulu karena ada foreign key ke visitors
+-- Hapus data kunjungan
 delete from public.visits;
 
 -- Hapus data pengunjung
 delete from public.visitors;
+
+-- Hapus log aktivitas
+delete from public.activity_logs;
 
 COMMIT;

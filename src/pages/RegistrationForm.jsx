@@ -362,7 +362,7 @@ export default function RegistrationForm() {
                     value={form.remarks}
                     onChange={update('remarks')}
                     className="w-full px-4 py-3 rounded-lg border border-outline bg-surface-bright focus:ring-2 focus:ring-secondary focus:border-secondary transition-all font-body-md text-body-md placeholder:text-outline/60"
-                    placeholder="Detail tambahan (misal: nama tuan rumah, nomor suite)"
+                    placeholder="Contoh: instansi asal, nomor surat, atau keperluan khusus"
                     rows="3"
                   />
                 </div>
