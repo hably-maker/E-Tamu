@@ -257,11 +257,12 @@ export default function AdminDashboard() {
   const [weeklyData, setWeeklyData] = useState([])
   const [monthlyData, setMonthlyData] = useState([])
   const [chartMode, setChartMode] = useState('weekly')
+  const [chartMonth, setChartMonth] = useState('')
 
   useEffect(() => {
     if (chartMode === 'weekly') loadWeeklyChart()
-    else loadMonthlyChart()
-  }, [chartMode])
+    else loadMonthlyChart(chartMonth)
+  }, [chartMode, chartMonth])
   const loadWeeklyChart = async () => {
     const days = []
     const now = new Date()
@@ -291,25 +292,34 @@ export default function AdminDashboard() {
     setWeeklyData(days)
   }
 
-  const loadMonthlyChart = async () => {
+  const loadMonthlyChart = async (monthStr) => {
     const days = []
     const now = new Date()
-    const start = new Date(now.getFullYear(), now.getMonth(), 1)
+    let start
+    let end
+    if (monthStr) {
+      const [year, m] = monthStr.split('-').map(Number)
+      start = new Date(year, m - 1, 1)
+      end = new Date(year, m, 0)
+    } else {
+      start = new Date(now.getFullYear(), now.getMonth(), 1)
+      end = now
+    }
     let cursor = new Date(start)
-    while (cursor <= now) {
+    while (cursor <= end) {
       const dow = cursor.getDay()
       if (dow !== 0 && dow !== 6) {
         const d = new Date(cursor)
         d.setHours(0, 0, 0, 0)
-        const end = new Date(d)
-        end.setHours(23, 59, 59, 999)
+        const dayEnd = new Date(d)
+        dayEnd.setHours(23, 59, 59, 999)
         const { count } = await supabase
           .from('visits')
           .select('*', { count: 'exact', head: true })
           .gte('check_in_at', d.toISOString())
-          .lte('check_in_at', end.toISOString())
+          .lte('check_in_at', dayEnd.toISOString())
         days.push({
-          label: d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+          label: d.toLocaleDateString('id-ID', { day: 'numeric' }),
           count: count || 0
         })
       }
@@ -952,52 +962,66 @@ export default function AdminDashboard() {
                   {chartMode === 'monthly' && 'Tren Kunjungan Bulanan (Hari Kerja)'}
                 </h4>
                 <p className="font-label-sm text-label-sm text-on-surface-variant">
-                  {chartMode === 'weekly' && 'Kunjungan Senin&ndash;Jumat (1 minggu terakhir) untuk memantau tren mingguan.'}
-                  {chartMode === 'monthly' && 'Kunjungan Senin&ndash;Jumat (1 bulan terakhir) untuk memantau tren bulanan.'}
+                  {chartMode === 'weekly' && 'Kunjungan Senin-Jumat (1 minggu terakhir) untuk memantau tren mingguan.'}
+                  {chartMode === 'monthly' && 'Kunjungan Senin-Jumat pada bulan yang dipilih untuk memantau tren bulanan.'}
                 </p>
               </div>
-              <div className="flex rounded-lg bg-surface-container-low p-1">
-                <button
-                  onClick={() => setChartMode('weekly')}
-                  className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
-                    chartMode === 'weekly' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-                  }`}
-                >
-                  Mingguan
-                </button>
-                <button
-                  onClick={() => setChartMode('monthly')}
-                  className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
-                    chartMode === 'monthly' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-                  }`}
-                >
-                  Bulanan
-                </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex rounded-lg bg-surface-container-low p-1">
+                  <button
+                    onClick={() => setChartMode('weekly')}
+                    className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
+                      chartMode === 'weekly' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    Mingguan
+                  </button>
+                  <button
+                    onClick={() => setChartMode('monthly')}
+                    className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
+                      chartMode === 'monthly' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    Bulanan
+                  </button>
+                </div>
+                {chartMode === 'monthly' && (
+                  <input
+                    type="month"
+                    value={chartMonth}
+                    onChange={(e) => setChartMonth(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-low font-label-sm text-label-sm outline-none focus:ring-1 focus:ring-secondary"
+                  />
+                )}
               </div>
             </div>
-            <div className="flex items-start justify-center gap-1">
-              {(chartMode === 'weekly' ? weeklyData : monthlyData).map((d) => {
-                const dataset = chartMode === 'weekly' ? weeklyData : monthlyData
-                const max = Math.max(1, ...dataset.map((c) => c.count))
-                const heightPct = (d.count / max) * 100
-                return (
-                  <div key={d.label} className="flex-1 min-w-[32px] flex flex-col items-center gap-1">
-                    <span className="font-label-sm text-label-sm text-on-surface font-bold whitespace-nowrap leading-none mb-1">
-                      {d.count}
-                    </span>
-                    <div className="w-full flex items-end justify-center" style={{ height: '140px' }}>
-                      <div
-                        className="w-3/4 rounded-t-lg bg-secondary transition-all"
-                        style={{ height: `${heightPct}%`, minHeight: d.count > 0 ? '6px' : '0' }}
-                        title={`${d.label}: ${d.count} pengunjung`}
-                      />
+            <div className="overflow-x-auto -mx-2 px-2">
+              <div className="flex items-start justify-center gap-1 min-w-max">
+                {(chartMode === 'weekly' ? weeklyData : monthlyData).map((d) => {
+                  const dataset = chartMode === 'weekly' ? weeklyData : monthlyData
+                  const max = Math.max(1, ...dataset.map((c) => c.count))
+                  const heightPct = (d.count / max) * 100
+                  return (
+                    <div key={d.label} className="flex-1 min-w-[28px] flex flex-col items-center gap-1">
+                      {d.count > 0 && (
+                        <span className="font-label-sm text-label-sm text-on-surface font-bold whitespace-nowrap leading-none mb-1">
+                          {d.count}
+                        </span>
+                      )}
+                      <div className="w-full flex items-end justify-center" style={{ height: '140px' }}>
+                        <div
+                          className="w-3/4 rounded-t-lg bg-secondary transition-all"
+                          style={{ height: `${heightPct}%`, minHeight: d.count > 0 ? '6px' : '0' }}
+                          title={`${d.label}: ${d.count} pengunjung`}
+                        />
+                      </div>
+                      <span className="font-label-sm text-label-sm text-on-surface-variant text-center whitespace-nowrap truncate w-full leading-tight mt-1">
+                        {d.label}
+                      </span>
                     </div>
-                    <span className="font-label-sm text-label-sm text-on-surface-variant text-center whitespace-nowrap truncate w-full leading-tight mt-1">
-                      {d.label}
-                    </span>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </div>
 
