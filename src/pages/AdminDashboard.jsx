@@ -121,7 +121,6 @@ export default function AdminDashboard() {
   const [visits, setVisits] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [employeeFilter, setEmployeeFilter] = useState('all')
   const [query, setQuery] = useState('')
   const PAGE_SIZE = 20
   const [page, setPage] = useState(1)
@@ -144,7 +143,7 @@ export default function AdminDashboard() {
     const { data, error, count } = await supabase
       .from('visits')
       .select(
-        'id, purpose, remarks, status, check_in_at, check_out_at, qr_code, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, position)',
+        'id, visitor_id, employee_id, purpose, remarks, status, check_in_at, check_out_at, qr_code, destination_text, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, rank, position)',
         { count: 'exact' }
       )
       .order('check_in_at', { ascending: false })
@@ -432,7 +431,7 @@ export default function AdminDashboard() {
 
   // Admin management
   const [admins, setAdmins] = useState([])
-  const [adminForm, setAdminForm] = useState({ fullName: '', email: '', password: '' })
+  const [adminForm, setAdminForm] = useState({ fullName: '', email: '' })
   const [savingAdmin, setSavingAdmin] = useState(false)
   const [adminError, setAdminError] = useState('')
 
@@ -444,29 +443,29 @@ export default function AdminDashboard() {
   const addAdmin = async (e) => {
     e.preventDefault()
     setAdminError('')
-    if (!adminForm.email.trim() || !adminForm.password || adminForm.password.length < 6) {
-      setAdminError('Email wajib diisi dan kata sandi minimal 6 karakter.')
+    if (!adminForm.email.trim()) {
+      setAdminError('Email wajib diisi.')
+      return
+    }
+    if (!adminForm.email.trim().includes('@')) {
+      setAdminError('Format email tidak valid.')
       return
     }
     setSavingAdmin(true)
     try {
-      const { data, error } = await supabase.auth.admin.createUser({
-        email: adminForm.email.trim(),
-        password: adminForm.password,
-        email_confirm: true,
-        user_metadata: { full_name: adminForm.fullName.trim() || adminForm.email.trim(), role: 'admin' }
+      const { data, error } = await supabase.functions.invoke('invite-admin', {
+        body: {
+          email: adminForm.email.trim(),
+          fullName: adminForm.fullName.trim() || adminForm.email.trim()
+        }
       })
       if (error) throw error
-      if (data?.user) {
-        await supabase
-          .from('profiles')
-          .update({ role: 'admin', full_name: adminForm.fullName.trim() || adminForm.email.trim() })
-          .eq('id', data.user.id)
-      }
-      setAdminForm({ fullName: '', email: '', password: '' })
+      if (data?.error) throw new Error(data.error)
+      setAdminForm({ fullName: '', email: '' })
+      alert('Undangan admin berhasil dikirim. Pengguna yang diundang akan menerima email untuk membuat akun.')
       loadAdmins()
     } catch (err) {
-      setAdminError(err.message || 'Gagal menambah admin.')
+      setAdminError(err.message || 'Gagal mengirim undangan admin.')
     } finally {
       setSavingAdmin(false)
     }
@@ -604,7 +603,7 @@ export default function AdminDashboard() {
     let q = supabase
       .from('visits')
       .select(
-        'id, purpose, remarks, status, check_in_at, check_out_at, visitors(id, full_name, phone), employees(id, full_name, position)'
+        'id, visitor_id, employee_id, purpose, remarks, status, check_in_at, check_out_at, destination_text, visitors(id, full_name, phone), employees(id, full_name, rank, position)'
       )
 
     if (exportMode === 'range' && rangeStart && rangeEnd) {
@@ -665,7 +664,6 @@ export default function AdminDashboard() {
 
   const filtered = useMemo(() => {
     return visits.filter((v) => {
-      if (employeeFilter !== 'all' && v.employee_id !== employeeFilter) return false
       if (query) {
         const q = query.toLowerCase()
         const name = v.visitors?.full_name?.toLowerCase() || ''
@@ -676,7 +674,7 @@ export default function AdminDashboard() {
       }
       return true
     })
-  }, [visits, employeeFilter, query])
+  }, [visits, query])
 
   if (authLoading || (session && !profile)) {
     return (
@@ -1103,29 +1101,6 @@ export default function AdminDashboard() {
               <h4 className="font-headline-md text-headline-md text-on-surface">
                 Pengunjung Terbaru
               </h4>
-              <div className="flex gap-2">
-                <div className="relative">
-                  <Icon
-                    name="filter_list"
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-outline text-[18px]"
-                  />
-                  <select
-                    value={employeeFilter}
-                    onChange={(e) => {
-                      setEmployeeFilter(e.target.value)
-                      setPage(1)
-                    }}
-                    className="pl-8 pr-4 py-1.5 bg-surface-container-low border-none rounded-lg font-label-sm text-label-sm outline-none focus:ring-1 focus:ring-secondary cursor-pointer"
-                  >
-                    <option value="all">Semua Tujuan</option>
-                    {employees.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -1419,18 +1394,18 @@ export default function AdminDashboard() {
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
                 <div>
                   <h2 className="font-headline-lg text-headline-lg text-primary tracking-tight">
-                    Kelola Admin
+                    Kelola Pengguna
                   </h2>
                   <p className="font-body-md text-body-md text-on-surface-variant">
-                    Tambah akun admin dan atur peran akses dashboard.
+                    Kirim undangan email ke calon admin. Pengguna yang diterima akan masuk sebagai Staff dan dapat diangkat menjadi Admin.
                   </p>
                 </div>
               </div>
 
               <div className="glass-card rounded-xl p-6 mb-8 shadow-sm">
-                <h4 className="font-headline-md text-headline-md text-on-surface mb-4">
-                  Tambah Admin Baru
-                </h4>
+                  <h4 className="font-headline-md text-headline-md text-on-surface mb-4">
+                    Kirim Undangan
+                  </h4>
                 <form onSubmit={addAdmin} className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block font-label-md text-label-md text-on-surface mb-1">Nama Lengkap</label>
@@ -1451,23 +1426,13 @@ export default function AdminDashboard() {
                       placeholder="admin@email.com"
                     />
                   </div>
-                  <div>
-                    <label className="block font-label-md text-label-md text-on-surface mb-1">Kata Sandi</label>
-                    <input
-                      type="password"
-                      value={adminForm.password}
-                      onChange={(e) => setAdminForm((f) => ({ ...f, password: e.target.value }))}
-                      className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
-                      placeholder="Minimal 6 karakter"
-                    />
-                  </div>
                   <div className="md:col-span-3 flex items-end">
                     <button
                       type="submit"
                       disabled={savingAdmin}
                       className="bg-secondary text-on-primary px-4 py-2.5 rounded-lg font-label-md hover:opacity-90 transition-all disabled:opacity-60"
                     >
-                      {savingAdmin ? 'Membuat...' : 'Tambah Admin'}
+                      {savingAdmin ? 'Mengirim...' : 'Kirim Undangan Admin'}
                     </button>
                   </div>
                 </form>
@@ -1481,7 +1446,7 @@ export default function AdminDashboard() {
               <div className="glass-card rounded-xl overflow-hidden shadow-sm">
                 <div className="px-6 py-4 border-b border-outline-variant">
                   <h4 className="font-headline-md text-headline-md text-on-surface">
-                    Daftar Admin ({admins.length})
+                    Daftar Pengguna ({admins.length})
                   </h4>
                 </div>
                 <div className="overflow-x-auto">
@@ -1498,7 +1463,7 @@ export default function AdminDashboard() {
                       {admins.length === 0 && (
                         <tr>
                           <td colSpan={4} className="px-6 py-8 text-center text-on-surface-variant">
-                            Belum ada data admin.
+                             Belum ada data pengguna.
                           </td>
                         </tr>
                       )}
