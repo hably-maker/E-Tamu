@@ -452,7 +452,11 @@ export default function AdminDashboard() {
   const [adminError, setAdminError] = useState('')
 
   const loadAdmins = async () => {
-    const { data } = await supabase.from('profiles').select('id, full_name, role, email').order('full_name')
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, email')
+      .eq('role', 'admin')
+      .order('full_name')
     if (data) setAdmins(data)
   }
 
@@ -1451,7 +1455,7 @@ export default function AdminDashboard() {
                 <h4 className="font-headline-md text-headline-md text-on-surface mb-4">
                   Tambah Admin Baru
                 </h4>
-                <form onSubmit={addAdmin} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <form onSubmit={addAdmin} className="grid grid-cols-1 md:grid-cols-3 gap-4" autoComplete="off">
                   <div>
                     <label className="block font-label-md text-label-md text-on-surface mb-1">Nama Lengkap</label>
                     <input
@@ -1459,6 +1463,7 @@ export default function AdminDashboard() {
                       onChange={(e) => setAdminForm((f) => ({ ...f, fullName: e.target.value }))}
                       className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
                       placeholder="Nama admin"
+                      autoComplete="off"
                     />
                   </div>
                   <div>
@@ -1469,6 +1474,7 @@ export default function AdminDashboard() {
                       onChange={(e) => setAdminForm((f) => ({ ...f, email: e.target.value }))}
                       className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
                       placeholder="admin@email.com"
+                      autoComplete="off"
                     />
                   </div>
                   <div>
@@ -1479,6 +1485,7 @@ export default function AdminDashboard() {
                       onChange={(e) => setAdminForm((f) => ({ ...f, password: e.target.value }))}
                       className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
                       placeholder="Minimal 6 karakter"
+                      autoComplete="off"
                     />
                   </div>
                   <div className="md:col-span-3 flex items-end">
