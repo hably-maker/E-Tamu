@@ -121,12 +121,12 @@ export default function AdminDashboard() {
   const [visits, setVisits] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [employeeFilter, setEmployeeFilter] = useState('all')
   const [query, setQuery] = useState('')
   const PAGE_SIZE = 20
   const [page, setPage] = useState(1)
   const pageRef = useRef(page)
   const [totalVisits, setTotalVisits] = useState(0)
-  const mountedRef = useRef(false)
 
   useEffect(() => {
     pageRef.current = page
@@ -138,12 +138,13 @@ export default function AdminDashboard() {
 
   async function loadVisits(targetPage) {
     const pageToLoad = targetPage ?? pageRef.current ?? 1
+    setLoading(true)
     const from = (pageToLoad - 1) * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
     const { data, error, count } = await supabase
       .from('visits')
       .select(
-        'id, visitor_id, employee_id, purpose, remarks, status, check_in_at, check_out_at, qr_code, destination_text, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, rank, position)',
+        'id, purpose, remarks, status, check_in_at, check_out_at, qr_code, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, position)',
         { count: 'exact' }
       )
       .order('check_in_at', { ascending: false })
@@ -161,26 +162,39 @@ export default function AdminDashboard() {
       ].filter(Boolean).join(' ')
       setLoadError(msg)
     }
-    if (!mountedRef.current) {
-      mountedRef.current = true
-      setLoading(false)
-    }
+    setLoading(false)
   }
 
   const totalPages = Math.max(1, Math.ceil(totalVisits / PAGE_SIZE))
 
   useEffect(() => {
+    if (authLoading) return
+    if (!session) {
+      navigate('/login')
+      return
+    }
+    if (session && !profile) return
+    if (profile?.role !== 'admin') {
+      navigate('/')
+      return
+    }
+
     loadVisits(1)
+    loadChart()
+    loadEmployees()
+    loadAdmins()
+    loadLogs()
 
     const channel = supabase
       .channel('visits-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'visits' },
-        () => {
+        (payload) => {
           loadVisits()
-          if (chartMode === 'weekly') loadWeeklyChart()
-          else loadMonthlyChart()
+          loadChart()
+          loadWeeklyChart()
+          loadMonthlyChart()
         }
       )
       .subscribe((status) => {
@@ -190,8 +204,6 @@ export default function AdminDashboard() {
 
     const interval = setInterval(() => {
       loadVisits()
-      if (chartMode === 'weekly') loadWeeklyChart()
-      else loadMonthlyChart()
     }, 30000)
 
     return () => {
@@ -199,17 +211,12 @@ export default function AdminDashboard() {
       clearInterval(interval)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [profile, authLoading, session])
 
   useEffect(() => {
-    if (location.pathname === '/admin') {
+    if (location.pathname === '/admin' && profile?.role === 'admin') {
       setPage(1)
-    loadVisits(1)
-    loadWeeklyChart()
-    loadMonthlyChart()
-    loadEmployees()
-    loadAdmins()
-    loadLogs()
+      loadVisits(1)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname])
@@ -252,17 +259,12 @@ export default function AdminDashboard() {
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
 
-  // Chart: kunjungan per hari kerja (Senin-Jumat)
+  // Chart: kunjungan per hari kerja (Senin-Jumat), 5 hari kerja terakhir
+  const [chartData, setChartData] = useState([])
   const [weeklyData, setWeeklyData] = useState([])
   const [monthlyData, setMonthlyData] = useState([])
-  const [chartMode, setChartMode] = useState('weekly')
-  const [chartMonth, setChartMonth] = useState('')
-
-  useEffect(() => {
-    if (chartMode === 'weekly') loadWeeklyChart()
-    else loadMonthlyChart(chartMonth)
-  }, [chartMode, chartMonth])
-  const loadWeeklyChart = async () => {
+  const [chartMode, setChartMode] = useState('daily')
+  const loadChart = async () => {
     const days = []
     const now = new Date()
     let added = 0
@@ -288,43 +290,57 @@ export default function AdminDashboard() {
       cursor.setDate(cursor.getDate() - 1)
     }
     days.reverse()
-    setWeeklyData(days)
+    setChartData(days)
   }
 
-  const loadMonthlyChart = async (monthStr) => {
-    const days = []
+  const loadWeeklyChart = async () => {
+    const weeks = []
     const now = new Date()
-    let start
-    let end
-    if (monthStr) {
-      const [year, m] = monthStr.split('-').map(Number)
-      start = new Date(year, m - 1, 1)
-      end = new Date(year, m, 0)
-    } else {
-      start = new Date(now.getFullYear(), now.getMonth(), 1)
-      end = now
+    let cursor = new Date(now)
+    cursor.setDate(now.getDate() - (now.getDay() || 7) + 7)
+    cursor.setHours(23, 59, 59, 999)
+    for (let i = 0; i < 8; i++) {
+      const weekEnd = new Date(cursor)
+      const weekStart = new Date(cursor)
+      weekStart.setDate(weekEnd.getDate() - 6)
+      weekStart.setHours(0, 0, 0, 0)
+      const { count } = await supabase
+        .from('visits')
+        .select('*', { count: 'exact', head: true })
+        .gte('check_in_at', weekStart.toISOString())
+        .lte('check_in_at', weekEnd.toISOString())
+      weeks.push({
+        label: `${weekStart.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${weekEnd.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`,
+        count: count || 0
+      })
+      cursor.setDate(cursor.getDate() - 7)
     }
-    let cursor = new Date(start)
-    while (cursor <= end) {
-      const dow = cursor.getDay()
-      if (dow !== 0 && dow !== 6) {
-        const d = new Date(cursor)
-        d.setHours(0, 0, 0, 0)
-        const dayEnd = new Date(d)
-        dayEnd.setHours(23, 59, 59, 999)
-        const { count } = await supabase
-          .from('visits')
-          .select('*', { count: 'exact', head: true })
-          .gte('check_in_at', d.toISOString())
-          .lte('check_in_at', dayEnd.toISOString())
-        days.push({
-          label: d.toLocaleDateString('id-ID', { day: 'numeric' }),
-          count: count || 0
-        })
-      }
-      cursor.setDate(cursor.getDate() + 1)
+    weeks.reverse()
+    setWeeklyData(weeks)
+  }
+
+  const loadMonthlyChart = async () => {
+    const months = []
+    const now = new Date()
+    let cursor = new Date(now.getFullYear(), now.getMonth(), 1)
+    cursor.setHours(0, 0, 0, 0)
+    for (let i = 0; i < 6; i++) {
+      const monthStart = new Date(cursor)
+      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0)
+      monthEnd.setHours(23, 59, 59, 999)
+      const { count } = await supabase
+        .from('visits')
+        .select('*', { count: 'exact', head: true })
+        .gte('check_in_at', monthStart.toISOString())
+        .lte('check_in_at', monthEnd.toISOString())
+      months.push({
+        label: monthStart.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+        count: count || 0
+      })
+      cursor.setMonth(cursor.getMonth() - 1)
     }
-    setMonthlyData(days)
+    months.reverse()
+    setMonthlyData(months)
   }
 
   // Employee management
@@ -431,7 +447,7 @@ export default function AdminDashboard() {
 
   // Admin management
   const [admins, setAdmins] = useState([])
-  const [adminForm, setAdminForm] = useState({ fullName: '', email: '' })
+  const [adminForm, setAdminForm] = useState({ fullName: '', email: '', password: '' })
   const [savingAdmin, setSavingAdmin] = useState(false)
   const [adminError, setAdminError] = useState('')
 
@@ -443,29 +459,29 @@ export default function AdminDashboard() {
   const addAdmin = async (e) => {
     e.preventDefault()
     setAdminError('')
-    if (!adminForm.email.trim()) {
-      setAdminError('Email wajib diisi.')
-      return
-    }
-    if (!adminForm.email.trim().includes('@')) {
-      setAdminError('Format email tidak valid.')
+    if (!adminForm.email.trim() || !adminForm.password || adminForm.password.length < 6) {
+      setAdminError('Email wajib diisi dan kata sandi minimal 6 karakter.')
       return
     }
     setSavingAdmin(true)
     try {
-      const { data, error } = await supabase.functions.invoke('invite-admin', {
-        body: {
-          email: adminForm.email.trim(),
-          fullName: adminForm.fullName.trim() || adminForm.email.trim()
-        }
+      const { data, error } = await supabase.auth.admin.createUser({
+        email: adminForm.email.trim(),
+        password: adminForm.password,
+        email_confirm: true,
+        user_metadata: { full_name: adminForm.fullName.trim() || adminForm.email.trim(), role: 'admin' }
       })
       if (error) throw error
-      if (data?.error) throw new Error(data.error)
-      setAdminForm({ fullName: '', email: '' })
-      alert('Undangan admin berhasil dikirim. Pengguna yang diundang akan menerima email untuk membuat akun.')
+      if (data?.user) {
+        await supabase
+          .from('profiles')
+          .update({ role: 'admin', full_name: adminForm.fullName.trim() || adminForm.email.trim() })
+          .eq('id', data.user.id)
+      }
+      setAdminForm({ fullName: '', email: '', password: '' })
       loadAdmins()
     } catch (err) {
-      setAdminError(err.message || 'Gagal mengirim undangan admin.')
+      setAdminError(err.message || 'Gagal menambah admin.')
     } finally {
       setSavingAdmin(false)
     }
@@ -515,6 +531,7 @@ export default function AdminDashboard() {
   const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
+    loadChart()
     loadWeeklyChart()
     loadMonthlyChart()
     loadEmployees()
@@ -558,8 +575,9 @@ export default function AdminDashboard() {
 
       closeEdit()
       loadVisits()
-      if (chartMode === 'weekly') loadWeeklyChart()
-      else loadMonthlyChart()
+      loadChart()
+      loadWeeklyChart()
+      loadMonthlyChart()
       logActivity({
         profile,
         action: 'Mengedit Kunjungan',
@@ -581,10 +599,19 @@ export default function AdminDashboard() {
     setDeletingId(id)
     try {
       const { error } = await supabase.from('visits').delete().eq('id', id)
-      if (error) throw error
+      if (error) {
+        const detail = [
+          error.message || 'Gagal menghapus data.',
+          error.code ? `[code: ${error.code}]` : '',
+          error.details ? `[details: ${error.details}]` : '',
+          error.hint ? `[hint: ${error.hint}]` : ''
+        ].filter(Boolean).join(' ')
+        throw new Error(detail)
+      }
       loadVisits()
-      if (chartMode === 'weekly') loadWeeklyChart()
-      else loadMonthlyChart()
+      loadChart()
+      loadWeeklyChart()
+      loadMonthlyChart()
       logActivity({
         profile,
         action: 'Menghapus Kunjungan',
@@ -603,7 +630,7 @@ export default function AdminDashboard() {
     let q = supabase
       .from('visits')
       .select(
-        'id, visitor_id, employee_id, purpose, remarks, status, check_in_at, check_out_at, destination_text, visitors(id, full_name, phone), employees(id, full_name, rank, position)'
+        'id, purpose, remarks, status, check_in_at, check_out_at, visitors(id, full_name, phone), employees(id, full_name, position)'
       )
 
     if (exportMode === 'range' && rangeStart && rangeEnd) {
@@ -662,21 +689,20 @@ export default function AdminDashboard() {
     return visits.filter((v) => new Date(v.check_in_at).toISOString() >= startIso).length
   }, [visits])
 
-  const filtered = useMemo(() => {
-    return visits.filter((v) => {
-      if (query) {
-        const q = query.toLowerCase()
-        const name = v.visitors?.full_name?.toLowerCase() || ''
-        const org = v.visitors?.organization?.toLowerCase() || ''
-        const phone = v.visitors?.phone?.toLowerCase() || ''
-        const host = v.employees?.full_name?.toLowerCase() || ''
-        if (!name.includes(q) && !org.includes(q) && !phone.includes(q) && !host.includes(q)) return false
-      }
-      return true
-    })
-  }, [visits, query])
+  const filtered = visits.filter((v) => {
+    if (employeeFilter !== 'all' && v.employee_id !== employeeFilter) return false
+    if (query) {
+      const q = query.toLowerCase()
+      const name = v.visitors?.full_name?.toLowerCase() || ''
+      const org = v.visitors?.organization?.toLowerCase() || ''
+      const phone = v.visitors?.phone?.toLowerCase() || ''
+      const host = v.employees?.full_name?.toLowerCase() || ''
+      if (!name.includes(q) && !org.includes(q) && !phone.includes(q) && !host.includes(q)) return false
+    }
+    return true
+  })
 
-  if (authLoading || (session && !profile)) {
+  if (authLoading || (!profile && session)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface text-on-surface-variant">
         Memuat dasbor...
@@ -695,7 +721,7 @@ export default function AdminDashboard() {
     )
   }
 
-  if (loading && !mountedRef.current) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface text-on-surface-variant">
         Memuat dasbor...
@@ -956,70 +982,66 @@ export default function AdminDashboard() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div>
                 <h4 className="font-headline-md text-headline-md text-on-surface mb-1">
-                  {chartMode === 'weekly' && 'Tren Kunjungan Mingguan (Hari Kerja)'}
-                  {chartMode === 'monthly' && 'Tren Kunjungan Bulanan (Hari Kerja)'}
+                  {chartMode === 'daily' && 'Tren Kunjungan Hari Kerja'}
+                  {chartMode === 'weekly' && 'Tren Kunjungan Mingguan'}
+                  {chartMode === 'monthly' && 'Tren Kunjungan Bulanan'}
                 </h4>
                 <p className="font-label-sm text-label-sm text-on-surface-variant">
-                  {chartMode === 'weekly' && 'Kunjungan Senin-Jumat (1 minggu terakhir) untuk memantau tren mingguan.'}
-                  {chartMode === 'monthly' && 'Kunjungan Senin-Jumat pada bulan yang dipilih untuk memantau tren bulanan.'}
+                  {chartMode === 'daily' && 'Kunjungan Senin&ndash;Jumat (5 hari kerja terakhir) untuk memantau hari tersibuk.'}
+                  {chartMode === 'weekly' && 'Kunjungan per minggu (8 minggu terakhir) untuk memantau tren mingguan.'}
+                  {chartMode === 'monthly' && 'Kunjungan per bulan (6 bulan terakhir) untuk memantau tren bulanan.'}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex rounded-lg bg-surface-container-low p-1">
-                  <button
-                    onClick={() => setChartMode('weekly')}
-                    className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
-                      chartMode === 'weekly' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
-                    Mingguan
-                  </button>
-                  <button
-                    onClick={() => setChartMode('monthly')}
-                    className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
-                      chartMode === 'monthly' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
-                    Bulanan
-                  </button>
-                </div>
-                {chartMode === 'monthly' && (
-                  <input
-                    type="month"
-                    value={chartMonth}
-                    onChange={(e) => setChartMonth(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-low font-label-sm text-label-sm outline-none focus:ring-1 focus:ring-secondary"
-                  />
-                )}
+              <div className="flex rounded-lg bg-surface-container-low p-1">
+                <button
+                  onClick={() => setChartMode('daily')}
+                  className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
+                    chartMode === 'daily' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Harian
+                </button>
+                <button
+                  onClick={() => setChartMode('weekly')}
+                  className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
+                    chartMode === 'weekly' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Mingguan
+                </button>
+                <button
+                  onClick={() => setChartMode('monthly')}
+                  className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm transition-all ${
+                    chartMode === 'monthly' ? 'bg-secondary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Bulanan
+                </button>
               </div>
             </div>
-            <div className="overflow-x-auto -mx-2 px-2">
-              <div className="flex items-start justify-center gap-1 min-w-max">
-                {(chartMode === 'weekly' ? weeklyData : monthlyData).map((d) => {
-                  const dataset = chartMode === 'weekly' ? weeklyData : monthlyData
-                  const max = Math.max(1, ...dataset.map((c) => c.count))
-                  const heightPct = (d.count / max) * 100
-                  return (
-                    <div key={d.label} className="flex-1 min-w-[28px] flex flex-col items-center gap-1">
-                      {d.count > 0 && (
-                        <span className="font-label-sm text-label-sm text-on-surface font-bold whitespace-nowrap leading-none mb-1">
-                          {d.count}
-                        </span>
-                      )}
-                      <div className="w-full flex items-end justify-center" style={{ height: '140px' }}>
-                        <div
-                          className="w-3/4 rounded-t-lg bg-secondary transition-all"
-                          style={{ height: `${heightPct}%`, minHeight: d.count > 0 ? '6px' : '0' }}
-                          title={`${d.label}: ${d.count} pengunjung`}
-                        />
-                      </div>
-                      <span className="font-label-sm text-label-sm text-on-surface-variant text-center whitespace-nowrap truncate w-full leading-tight mt-1">
-                        {d.label}
-                      </span>
+            <div className="flex items-start justify-between gap-3">
+              {(chartMode === 'daily' ? chartData : chartMode === 'weekly' ? weeklyData : monthlyData).map((d) => {
+                const dataset = chartMode === 'daily' ? chartData : chartMode === 'weekly' ? weeklyData : monthlyData
+                const max = Math.max(1, ...dataset.map((c) => c.count))
+                const heightPct = (d.count / max) * 100
+                return (
+                  <div key={d.label} className="flex-1 min-w-[64px] flex flex-col items-center gap-1">
+                    <span className="font-label-sm text-label-sm text-on-surface font-bold whitespace-nowrap leading-none mb-1">
+                      {d.count}
+                    </span>
+                    <div className="w-full flex items-end" style={{ height: '160px' }}>
+                      <div
+                        className="w-full rounded-t-lg bg-secondary transition-all"
+                        style={{ height: `${heightPct}%`, minHeight: d.count > 0 ? '8px' : '0' }}
+                        title={`${d.label}: ${d.count} pengunjung`}
+                      />
                     </div>
-                  )
-                })}
-              </div>
+                    <span className="font-label-sm text-label-sm text-on-surface-variant text-center whitespace-nowrap truncate w-full leading-tight mt-1">
+                      {d.label}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -1101,6 +1123,29 @@ export default function AdminDashboard() {
               <h4 className="font-headline-md text-headline-md text-on-surface">
                 Pengunjung Terbaru
               </h4>
+              <div className="flex gap-2">
+                <div className="relative">
+                  <Icon
+                    name="filter_list"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-outline text-[18px]"
+                  />
+                  <select
+                    value={employeeFilter}
+                    onChange={(e) => {
+                      setEmployeeFilter(e.target.value)
+                      setPage(1)
+                    }}
+                    className="pl-8 pr-4 py-1.5 bg-surface-container-low border-none rounded-lg font-label-sm text-label-sm outline-none focus:ring-1 focus:ring-secondary cursor-pointer"
+                  >
+                    <option value="all">Semua Tujuan</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -1394,18 +1439,18 @@ export default function AdminDashboard() {
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
                 <div>
                   <h2 className="font-headline-lg text-headline-lg text-primary tracking-tight">
-                    Kelola Pengguna
+                    Kelola Admin
                   </h2>
                   <p className="font-body-md text-body-md text-on-surface-variant">
-                    Kirim undangan email ke calon admin. Pengguna yang diterima akan masuk sebagai Staff dan dapat diangkat menjadi Admin.
+                    Tambah akun admin dan atur peran akses dashboard.
                   </p>
                 </div>
               </div>
 
               <div className="glass-card rounded-xl p-6 mb-8 shadow-sm">
-                  <h4 className="font-headline-md text-headline-md text-on-surface mb-4">
-                    Kirim Undangan
-                  </h4>
+                <h4 className="font-headline-md text-headline-md text-on-surface mb-4">
+                  Tambah Admin Baru
+                </h4>
                 <form onSubmit={addAdmin} className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block font-label-md text-label-md text-on-surface mb-1">Nama Lengkap</label>
@@ -1426,13 +1471,23 @@ export default function AdminDashboard() {
                       placeholder="admin@email.com"
                     />
                   </div>
+                  <div>
+                    <label className="block font-label-md text-label-md text-on-surface mb-1">Kata Sandi</label>
+                    <input
+                      type="password"
+                      value={adminForm.password}
+                      onChange={(e) => setAdminForm((f) => ({ ...f, password: e.target.value }))}
+                      className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
+                      placeholder="Minimal 6 karakter"
+                    />
+                  </div>
                   <div className="md:col-span-3 flex items-end">
                     <button
                       type="submit"
                       disabled={savingAdmin}
                       className="bg-secondary text-on-primary px-4 py-2.5 rounded-lg font-label-md hover:opacity-90 transition-all disabled:opacity-60"
                     >
-                      {savingAdmin ? 'Mengirim...' : 'Kirim Undangan Admin'}
+                      {savingAdmin ? 'Membuat...' : 'Tambah Admin'}
                     </button>
                   </div>
                 </form>
@@ -1446,7 +1501,7 @@ export default function AdminDashboard() {
               <div className="glass-card rounded-xl overflow-hidden shadow-sm">
                 <div className="px-6 py-4 border-b border-outline-variant">
                   <h4 className="font-headline-md text-headline-md text-on-surface">
-                    Daftar Pengguna ({admins.length})
+                    Daftar Admin ({admins.length})
                   </h4>
                 </div>
                 <div className="overflow-x-auto">
@@ -1463,7 +1518,7 @@ export default function AdminDashboard() {
                       {admins.length === 0 && (
                         <tr>
                           <td colSpan={4} className="px-6 py-8 text-center text-on-surface-variant">
-                             Belum ada data pengguna.
+                            Belum ada data admin.
                           </td>
                         </tr>
                       )}
