@@ -127,6 +127,7 @@ export default function AdminDashboard() {
   const [page, setPage] = useState(1)
   const pageRef = useRef(page)
   const [totalVisits, setTotalVisits] = useState(0)
+  const mountedRef = useRef(false)
 
   useEffect(() => {
     pageRef.current = page
@@ -138,13 +139,15 @@ export default function AdminDashboard() {
 
   async function loadVisits(targetPage) {
     const pageToLoad = targetPage ?? pageRef.current ?? 1
-    setLoading(true)
+    if (!mountedRef.current) {
+      setLoading(true)
+    }
     const from = (pageToLoad - 1) * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
     const { data, error, count } = await supabase
       .from('visits')
       .select(
-        'id, purpose, remarks, status, check_in_at, check_out_at, qr_code, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, position)',
+        'id, purpose, remarks, status, check_in_at, check_out_at, qr_code, destination_text, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, rank, position)',
         { count: 'exact' }
       )
       .order('check_in_at', { ascending: false })
@@ -162,7 +165,10 @@ export default function AdminDashboard() {
       ].filter(Boolean).join(' ')
       setLoadError(msg)
     }
-    setLoading(false)
+    if (!mountedRef.current) {
+      mountedRef.current = true
+      setLoading(false)
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(totalVisits / PAGE_SIZE))
@@ -1464,6 +1470,8 @@ export default function AdminDashboard() {
                       className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
                       placeholder="Nama admin"
                       autoComplete="off"
+                      readOnly
+                      onFocus={(e) => e.target.removeAttribute('readonly')}
                     />
                   </div>
                   <div>
@@ -1475,6 +1483,8 @@ export default function AdminDashboard() {
                       className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
                       placeholder="admin@email.com"
                       autoComplete="off"
+                      readOnly
+                      onFocus={(e) => e.target.removeAttribute('readonly')}
                     />
                   </div>
                   <div>
@@ -1486,6 +1496,8 @@ export default function AdminDashboard() {
                       className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
                       placeholder="Minimal 6 karakter"
                       autoComplete="off"
+                      readOnly
+                      onFocus={(e) => e.target.removeAttribute('readonly')}
                     />
                   </div>
                   <div className="md:col-span-3 flex items-end">
