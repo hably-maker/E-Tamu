@@ -886,15 +886,6 @@ export default function AdminDashboard() {
               >
                 <Icon name="menu" className="text-[22px]" />
               </button>
-              <Link to="/" className="flex items-center gap-2">
-                {settings.logo_url ? (
-                  <img src={settings.logo_url} alt="E-Tamu" className="h-8 w-8 rounded object-cover" />
-                ) : (
-                  <span className="font-headline-md text-headline-md font-bold text-on-surface">
-                    E-Tamu
-                  </span>
-                )}
-              </Link>
             </div>
             <div className="hidden md:flex flex-1 justify-center px-8">
               <div className="relative w-full max-w-md">
