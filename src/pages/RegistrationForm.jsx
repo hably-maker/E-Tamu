@@ -393,23 +393,6 @@ export default function RegistrationForm() {
             © 2026 Sistem Buku Tamu Digital.
           </p>
         </div>
-        <div className="flex flex-wrap justify-center items-center gap-8">
-          <a className="font-label-sm text-label-sm text-surface-variant hover:text-secondary-container underline transition-all" href="#">
-            Kebijakan Privasi
-          </a>
-          <a className="font-label-sm text-label-sm text-surface-variant hover:text-secondary-container underline transition-all" href="#">
-            Ketentuan Layanan
-          </a>
-          <a className="font-label-sm text-label-sm text-surface-variant hover:text-secondary-container underline transition-all" href="#">
-            Hubungi Admin
-          </a>
-          <a className="font-label-sm text-label-sm text-surface-variant hover:text-secondary-container underline transition-all" href="#">
-            Support
-          </a>
-          <a href="https://www.miltama.dilmiltama.go.id/" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-surface-variant/10 flex items-center justify-center text-on-primary hover:bg-secondary transition-all">
-            <Icon name="public" />
-          </a>
-        </div>
       </footer>
 
       {/* Toast */}
