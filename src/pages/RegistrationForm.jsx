@@ -5,12 +5,13 @@ import SiteNavBar from '../components/SiteNavBar.jsx'
 import { useSiteSettings } from '../hooks/useSiteSettings.js'
 
 const PURPOSE_OPTIONS = [
-  { value: 'business', label: 'Pertemuan Bisnis' },
   { value: 'delivery', label: 'Pengiriman Berkas Perkara' },
+  { value: 'trial', label: 'Persidangan' },
   { value: 'letter_delivery', label: 'Pengiriman Surat' },
   { value: 'maintenance', label: 'Pemeliharaan / Dukungan' },
   { value: 'personal', label: 'Kunjungan Pribadi' },
   { value: 'interview', label: 'Wawancara Kerja' },
+  { value: 'business', label: 'Pertemuan Kemitraan atau pihak ketiga' },
   { value: 'other', label: 'Lainnya' }
 ]
 

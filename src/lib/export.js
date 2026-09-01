@@ -1,10 +1,11 @@
 const PURPOSE_LABELS = {
-  business: 'Pertemuan Bisnis',
+  business: 'Pertemuan Kemitraan atau pihak ketiga',
   delivery: 'Pengiriman Berkas Perkara',
   letter_delivery: 'Pengiriman Surat',
   maintenance: 'Pemeliharaan / Dukungan',
   personal: 'Kunjungan Pribadi',
-  interview: 'Wawancara Kerja'
+  interview: 'Wawancara Kerja',
+  trial: 'Persidangan'
 }
 
 function purposeLabel(value) {

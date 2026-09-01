@@ -17,12 +17,13 @@ function initials(name = '') {
 }
 
 const PURPOSE_LABELS = {
-  business: 'Pertemuan Bisnis',
+  business: 'Pertemuan Kemitraan atau pihak ketiga',
   delivery: 'Pengiriman Berkas Perkara',
   letter_delivery: 'Pengiriman Surat',
   maintenance: 'Pemeliharaan / Dukungan',
   personal: 'Kunjungan Pribadi',
-  interview: 'Wawancara Kerja'
+  interview: 'Wawancara Kerja',
+  trial: 'Persidangan'
 }
 
 function purposeLabel(value) {
@@ -242,9 +243,10 @@ export default function AdminDashboard() {
       const { error } = await supabase
         .from('site_settings')
         .update({
-          hero_bg_url: settingsLocal.hero_bg_url || null,
+           hero_bg_url: settingsLocal.hero_bg_url || null,
           form_bg_url: settingsLocal.form_bg_url || null,
-          logo_url: settingsLocal.logo_url || null
+          logo_url: settingsLocal.logo_url || null,
+          favicon_url: settingsLocal.favicon_url || null
         })
         .eq('id', 1)
       if (error) throw error
@@ -1705,6 +1707,12 @@ export default function AdminDashboard() {
                   onUpload={(url) => updateSetting('logo_url', url)}
                   previewClass="h-40"
                 />
+                <ImageField
+                  label="Favicon (Icon Tab Browser)"
+                  value={settingsLocal.favicon_url}
+                  onUpload={(url) => updateSetting('favicon_url', url)}
+                  previewClass="h-20"
+                />
               </div>
             </>
           )}
@@ -1742,8 +1750,9 @@ export default function AdminDashboard() {
               <div>
                 <label className="block font-label-md text-label-md text-on-surface mb-1">Keperluan</label>
                 <select value={editForm.purpose} onChange={(e) => setEditForm((f) => ({ ...f, purpose: e.target.value }))} className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary">
-                  <option value="business">Pertemuan Bisnis</option>
+                  <option value="business">Pertemuan Kemitraan atau pihak ketiga</option>
                   <option value="delivery">Pengiriman Berkas Perkara</option>
+                  <option value="trial">Persidangan</option>
                   <option value="letter_delivery">Pengiriman Surat</option>
                   <option value="maintenance">Pemeliharaan / Dukungan</option>
                   <option value="personal">Kunjungan Pribadi</option>

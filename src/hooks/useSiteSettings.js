@@ -5,6 +5,7 @@ const DEFAULTS = {
   hero_bg_url: '',
   form_bg_url: '',
   logo_url: '',
+  favicon_url: '',
   ticker_items: []
 }
 
