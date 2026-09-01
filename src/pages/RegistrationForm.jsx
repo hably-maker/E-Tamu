@@ -10,7 +10,7 @@ const PURPOSE_OPTIONS = [
   { value: 'letter_delivery', label: 'Pengiriman Surat' },
   { value: 'maintenance', label: 'Pemeliharaan / Dukungan' },
   { value: 'personal', label: 'Kunjungan Pribadi' },
-  { value: 'interview', label: 'Wawancara Kerja' },
+  { value: 'interview', label: 'Permohonan Informasi' },
   { value: 'business', label: 'Pertemuan Kemitraan atau pihak ketiga' },
   { value: 'other', label: 'Lainnya' }
 ]
@@ -356,7 +356,7 @@ export default function RegistrationForm() {
 
                 <div className="space-y-1">
                   <label className="font-label-md text-label-md text-on-surface" htmlFor="remarks">
-                    Catatan / Keterangan
+                    Keterangan
                   </label>
                   <textarea
                     id="remarks"
