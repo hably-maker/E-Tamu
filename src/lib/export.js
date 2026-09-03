@@ -4,7 +4,7 @@ const PURPOSE_LABELS = {
   letter_delivery: 'Pengiriman Surat',
   maintenance: 'Pemeliharaan / Dukungan',
   personal: 'Kunjungan Pribadi',
-  interview: 'Wawancara Kerja',
+  interview: 'Permohonan Informasi',
   trial: 'Persidangan'
 }
 
@@ -45,12 +45,60 @@ export async function exportCSV(visits, filename = 'data-kunjungan') {
 }
 
 export async function exportExcel(visits, filename = 'data-kunjungan') {
-  const XLSX = await import('xlsx')
+  const ExcelJS = await import('exceljs')
   const rows = flattenVisits(visits)
-  const ws = XLSX.utils.json_to_sheet(rows)
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Kunjungan')
-  XLSX.writeFile(wb, `${filename}.xlsx`)
+  const headers = rows.length > 0 ? Object.keys(rows[0]) : []
+
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('Kunjungan')
+  ws.columns = headers.map((h) => ({ header: h, key: h, width: String(h).length + 2 }))
+
+  const headerRow = ws.getRow(1)
+  headers.forEach((h, i) => {
+    const cell = headerRow.getCell(i + 1)
+    cell.value = h
+    cell.font = { bold: true }
+    cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    cell.border = thinBorder()
+  })
+  headerRow.commit()
+
+  rows.forEach((row) => {
+    const added = ws.addRow(headers.map((h) => row[h] ?? ''))
+    added.eachCell((cell) => {
+      cell.alignment = { vertical: 'middle', wrapText: true }
+      cell.border = thinBorder()
+    })
+    added.commit()
+  })
+
+  // Auto-fit column width berdasarkan teks terpanjang (header + data) +2 padding
+  if (headers.length > 0) {
+    headers.forEach((h, i) => {
+      let maxLen = String(h).length
+      rows.forEach((row) => {
+        const val = row[h] == null ? '' : String(row[h])
+        if (val.length > maxLen) maxLen = val.length
+      })
+      const col = ws.getColumn(i + 1)
+      col.width = maxLen + 2
+    })
+  }
+
+  const buffer = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  })
+  downloadBlob(blob, `${filename}.xlsx`)
+}
+
+function thinBorder() {
+  return {
+    top: { style: 'thin' },
+    left: { style: 'thin' },
+    bottom: { style: 'thin' },
+    right: { style: 'thin' }
+  }
 }
 
 export async function exportPDF(visits, filename = 'data-kunjungan') {

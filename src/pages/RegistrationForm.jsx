@@ -29,7 +29,7 @@ export default function RegistrationForm() {
     otherPurpose: '',
     remarks: ''
   })
-  const { settings } = useSiteSettings()
+  const { settings, loading: settingsLoading } = useSiteSettings()
   const [employees, setEmployees] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [showToast, setShowToast] = useState(false)
@@ -151,12 +151,14 @@ export default function RegistrationForm() {
         <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-gutter">
           {/* Left: context image */}
           <div className="lg:col-span-5 hidden lg:flex flex-col justify-center">
-            <div className="relative rounded-xl overflow-hidden h-full min-h-[500px]">
-              <img
-                alt="Lobi korporat profesional"
-                className="absolute inset-0 w-full h-full object-cover"
-                src={settings.form_bg_url || 'https://lh3.googleusercontent.com/aida-public/AB6AXuADZ3rpZT5KecUPyHDx8h8WQ7yF1BTl-sGwOzPq0zsq66uQ4nNUbMR3o7bs6NLtJhoGj4q6eSWEBXGt76FkKUNbPb1x96TEu1LB8OzSTkHO-DP7XNEEbxIrFZNuwdy0_kGJO08Fm7rTBFRvaTatID3XVlhGP45a3FUdaAovkyJNPnfCTdvyRnEcRW4VqwloYpnf5Hf9L0UypOrCSbje44GVX5XX9JnUZKQSBK5rMdL951hLiD83eCY-NGBoII0jVZ6JAeQrrInnB1M'}
-              />
+            <div className="relative rounded-xl overflow-hidden h-full min-h-[500px] bg-surface-container-low">
+              {!settingsLoading && (
+                <img
+                  alt="Lobi korporat profesional"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  src={settings.form_bg_url || 'https://lh3.googleusercontent.com/aida-public/AB6AXuADZ3rpZT5KecUPyHDx8h8WQ7yF1BTl-sGwOzPq0zsq66uQ4nNUbMR3o7bs6NLtJhoGj4q6eSWEBXGt76FkKUNbPb1x96TEu1LB8OzSTkHO-DP7XNEEbxIrFZNuwdy0_kGJO08Fm7rTBFRvaTatID3XVlhGP45a3FUdaAovkyJNPnfCTdvyRnEcRW4VqwloYpnf5Hf9L0UypOrCSbje44GVX5XX9JnUZKQSBK5rMdL951hLiD83eCY-NGBoII0jVZ6JAeQrrInnB1M'}
+                />
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-primary-container/80 to-transparent flex flex-col justify-end p-lg">
                 <h2 className="font-headline-lg text-headline-lg text-on-primary mb-sm">
                   Keamanan Ditingkatkan
@@ -393,6 +395,11 @@ export default function RegistrationForm() {
           <p className="font-body-md text-body-md text-surface-variant text-center md:text-left">
             © 2026 Sistem Buku Tamu Digital.
           </p>
+        </div>
+        <div className="flex items-center self-center md:self-end pl-1">
+          <span className="font-label-md text-label-md text-surface-variant">
+            v1.0.0
+          </span>
         </div>
       </footer>
 

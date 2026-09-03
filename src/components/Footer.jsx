@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom'
-import Icon from './Icon.jsx'
 
 export default function Footer() {
   return (
@@ -11,6 +10,11 @@ export default function Footer() {
         <p className="font-body-md text-body-md text-surface-variant text-center md:text-left">
           © 2026 Sistem Buku Tamu Digital.
         </p>
+      </div>
+      <div className="flex items-center self-center md:self-end pl-1">
+        <span className="font-label-md text-label-md text-surface-variant">
+          v1.0.0
+        </span>
       </div>
     </footer>
   )
