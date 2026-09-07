@@ -37,5 +37,8 @@ export function useAuth() {
 
   const signOut = () => supabase.auth.signOut()
 
-  return { session, profile, loading, signOut }
+  const isSuperAdmin = !!profile?.is_super_admin
+  const mustChangePassword = !!profile?.must_change_password
+
+  return { session, profile, loading, signOut, isSuperAdmin, mustChangePassword }
 }

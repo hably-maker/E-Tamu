@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute.jsx'
 import AdminLogin from './pages/AdminLogin.jsx'
 import RegistrationForm from './pages/RegistrationForm.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
+import AdminProfile from './pages/AdminProfile.jsx'
 
 export default function App() {
   const { pathname } = useLocation()
@@ -52,6 +53,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/profile"
+          element={
+            <ProtectedRoute>
+              <AdminProfile />
             </ProtectedRoute>
           }
         />

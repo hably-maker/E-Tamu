@@ -109,7 +109,7 @@ function ImageField({ label, value, onUpload, previewClass }) {
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { session, profile, signOut, loading: authLoading } = useAuth()
+  const { session, profile, signOut, loading: authLoading, isSuperAdmin } = useAuth()
   const { settings, reload } = useSiteSettings()
   const [tab, setTab] = useState('dasbor') // dasbor | pegawai | admin | pengaturan
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -462,8 +462,9 @@ export default function AdminDashboard() {
   const loadAdmins = async () => {
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, role, email')
-      .eq('role', 'admin')
+      .select('id, full_name, role, email, is_super_admin, must_change_password')
+      .in('role', ['admin', 'staff'])
+      .order('role', { ascending: false })
       .order('full_name')
     if (data) setAdmins(data)
   }
@@ -477,19 +478,13 @@ export default function AdminDashboard() {
     }
     setSavingAdmin(true)
     try {
-      const { data, error } = await supabase.auth.admin.createUser({
-        email: adminForm.email.trim(),
-        password: adminForm.password,
-        email_confirm: true,
-        user_metadata: { full_name: adminForm.fullName.trim() || adminForm.email.trim(), role: 'admin' }
+      const { error } = await supabase.rpc('admin_create_user', {
+        p_email: adminForm.email.trim(),
+        p_password: adminForm.password,
+        p_full_name: adminForm.fullName.trim() || adminForm.email.trim(),
+        p_role: 'admin'
       })
       if (error) throw error
-      if (data?.user) {
-        await supabase
-          .from('profiles')
-          .update({ role: 'admin', full_name: adminForm.fullName.trim() || adminForm.email.trim() })
-          .eq('id', data.user.id)
-      }
       setAdminForm({ fullName: '', email: '', password: '' })
       loadAdmins()
     } catch (err) {
@@ -502,11 +497,54 @@ export default function AdminDashboard() {
   const toggleAdminRole = async (id, currentRole) => {
     const newRole = currentRole === 'admin' ? 'staff' : 'admin'
     try {
-      const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', id)
+      const { error } = await supabase.rpc('admin_update_role', {
+        p_user_id: id,
+        p_new_role: newRole
+      })
       if (error) throw error
       loadAdmins()
     } catch (err) {
       alert(err.message || 'Gagal mengubah peran.')
+    }
+  }
+
+  const [resetTarget, setResetTarget] = useState(null)
+  const [resetNewPassword, setResetNewPassword] = useState('')
+  const [resettingPassword, setResettingPassword] = useState(false)
+  const [resetError, setResetError] = useState('')
+
+  const openResetDialog = (admin) => {
+    setResetTarget(admin)
+    setResetNewPassword('')
+    setResetError('')
+  }
+  const closeResetDialog = () => {
+    setResetTarget(null)
+    setResetNewPassword('')
+    setResetError('')
+  }
+
+  const submitResetPassword = async (e) => {
+    e.preventDefault()
+    if (!resetTarget) return
+    if (resetNewPassword.length < 6) {
+      setResetError('Kata sandi minimal 6 karakter.')
+      return
+    }
+    setResettingPassword(true)
+    setResetError('')
+    try {
+      const { error } = await supabase.rpc('admin_reset_password', {
+        p_user_id: resetTarget.id,
+        p_new_password: resetNewPassword
+      })
+      if (error) throw error
+      closeResetDialog()
+      loadAdmins()
+    } catch (err) {
+      setResetError(err.message || 'Gagal mereset kata sandi.')
+    } finally {
+      setResettingPassword(false)
     }
   }
 
@@ -831,17 +869,19 @@ export default function AdminDashboard() {
             <Icon name="groups" />
             <span className="font-label-md text-label-md">Data Pegawai</span>
           </button>
-          <button
-            onClick={() => selectTab('admin')}
-            className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
-              tab === 'admin'
-                ? 'bg-secondary-container text-on-secondary-container'
-                : 'text-on-surface-variant hover:bg-surface-container-high'
-            }`}
-          >
-            <Icon name="admin_panel_settings" />
-            <span className="font-label-md text-label-md">Kelola Admin</span>
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={() => selectTab('admin')}
+              className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
+                tab === 'admin'
+                  ? 'bg-secondary-container text-on-secondary-container'
+                  : 'text-on-surface-variant hover:bg-surface-container-high'
+              }`}
+            >
+              <Icon name="admin_panel_settings" />
+              <span className="font-label-md text-label-md">Kelola Admin</span>
+            </button>
+          )}
           <button
             onClick={() => selectTab('log')}
             className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all ${
@@ -865,6 +905,15 @@ export default function AdminDashboard() {
             <span className="font-label-md text-label-md">Pengaturan</span>
           </button>
         </nav>
+        <div className="px-4 pt-2">
+          <button
+            onClick={() => navigate('/admin/profile')}
+            className="w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-all text-on-surface-variant hover:bg-surface-container-high"
+          >
+            <Icon name="account_circle" />
+            <span className="font-label-md text-label-md">Profil Saya</span>
+          </button>
+        </div>
         <div className="px-4 py-6 mt-auto">
           <button
             onClick={handleLogout}
@@ -913,10 +962,15 @@ export default function AdminDashboard() {
                   {profile?.full_name || 'Admin'}
                 </p>
                 <p className="font-label-sm text-label-sm text-on-surface-variant opacity-70">
-                  {profile?.role === 'admin' ? 'Super Admin' : 'Staff'}
+                  {profile?.is_super_admin ? 'Super Admin' : (profile?.role === 'admin' ? 'Admin' : 'Staff')}
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant">
+              <button
+                type="button"
+                onClick={() => navigate('/admin/profile')}
+                className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant hover:ring-2 hover:ring-secondary/40 transition-all"
+                aria-label="Buka profil saya"
+              >
                 {profile?.avatar_url ? (
                   <img className="w-full h-full object-cover" src={profile.avatar_url} alt="avatar" />
                 ) : (
@@ -924,7 +978,7 @@ export default function AdminDashboard() {
                     {initials(profile?.full_name || 'A')}
                   </span>
                 )}
-              </div>
+              </button>
             </div>
           </div>
         </header>
@@ -1161,7 +1215,7 @@ export default function AdminDashboard() {
                     <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">
                       No. Telepon
                     </th>
-                    <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">
+                    <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest min-w-[180px]">
                       Tujuan (Yang Ditemui)
                     </th>
                     <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">
@@ -1206,13 +1260,27 @@ export default function AdminDashboard() {
                       <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">
                         {v.visitors?.phone || '-'}
                       </td>
-                      <td className="px-6 py-4">
-                        <p className="font-label-md text-label-md text-on-surface">
-                          {v.employees?.full_name || v.destination_text || 'Lobi'}
-                        </p>
-                        <p className="text-[12px] text-on-surface-variant">
-                          {(v.employees?.rank ? `${v.employees.rank} ` : '') + (v.employees?.position || (v.destination_text ? 'Tujuan lainnya' : '-'))}
-                        </p>
+                      <td className="px-6 py-4 align-top min-w-[180px]">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-label-md text-label-md text-on-surface font-bold whitespace-nowrap">
+                            {v.employees?.full_name || v.destination_text || 'Lobi'}
+                          </span>
+                          {v.employees?.rank && (
+                            <span className="text-[12px] text-on-surface-variant whitespace-nowrap">
+                              {v.employees.rank}
+                            </span>
+                          )}
+                          {v.employees?.position && (
+                            <span className="text-[12px] text-on-surface-variant whitespace-nowrap">
+                              {v.employees.position}
+                            </span>
+                          )}
+                          {!v.employees?.position && v.destination_text && (
+                            <span className="text-[12px] text-on-surface-variant">
+                              Tujuan lainnya
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">
                         {purposeLabel(v.purpose)}
@@ -1513,7 +1581,7 @@ export default function AdminDashboard() {
               <div className="glass-card rounded-xl overflow-hidden shadow-sm">
                 <div className="px-6 py-4 border-b border-outline-variant">
                   <h4 className="font-headline-md text-headline-md text-on-surface">
-                    Daftar Admin ({admins.length})
+                    Daftar Pengguna ({admins.length})
                   </h4>
                 </div>
                 <div className="overflow-x-auto">
@@ -1536,7 +1604,14 @@ export default function AdminDashboard() {
                       )}
                       {admins.map((a) => (
                         <tr key={a.id} className="hover:bg-surface-container-low transition-colors">
-                          <td className="px-6 py-4 font-label-md text-label-md font-bold text-on-surface">{a.full_name || '-'}</td>
+                          <td className="px-6 py-4 font-label-md text-label-md font-bold text-on-surface">
+                            {a.full_name || '-'}
+                            {a.is_super_admin && (
+                              <span className="ml-2 font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-tertiary-container text-on-tertiary-container">
+                                Super
+                              </span>
+                            )}
+                          </td>
                           <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">{a.email || '-'}</td>
                           <td className="px-6 py-4">
                             <span className={`font-label-sm text-label-sm px-3 py-1 rounded-full ${a.role === 'admin' ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
@@ -1544,12 +1619,22 @@ export default function AdminDashboard() {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <button
-                              onClick={() => toggleAdminRole(a.id, a.role)}
-                              className="font-label-sm text-label-sm text-secondary underline hover:opacity-80"
-                            >
-                              {a.role === 'admin' ? 'Jadikan Staff' : 'Jadikan Admin'}
-                            </button>
+                            <div className="inline-flex items-center gap-3">
+                              <button
+                                onClick={() => toggleAdminRole(a.id, a.role)}
+                                className="font-label-sm text-label-sm text-secondary underline hover:opacity-80"
+                                disabled={a.is_super_admin}
+                                title={a.is_super_admin ? 'Tidak dapat mengubah peran super admin' : ''}
+                              >
+                                {a.role === 'admin' ? 'Jadikan Staff' : 'Jadikan Admin'}
+                              </button>
+                              <button
+                                onClick={() => openResetDialog(a)}
+                                className="font-label-sm text-label-sm text-tertiary underline hover:opacity-80"
+                              >
+                                Reset Password
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1557,6 +1642,59 @@ export default function AdminDashboard() {
                   </table>
                 </div>
               </div>
+
+              {resetTarget && (
+                <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center p-4">
+                  <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-2xl w-full max-w-md p-md md:p-lg">
+                    <h4 className="font-headline-md text-headline-md text-on-surface mb-base">
+                      Reset Kata Sandi
+                    </h4>
+                    <p className="font-body-md text-body-md text-on-surface-variant mb-md">
+                      Reset kata sandi untuk <span className="font-bold">{resetTarget.full_name || resetTarget.email}</span>.
+                      Admin akan diminta mengganti kata sandi ini saat login berikutnya.
+                    </p>
+                    <form onSubmit={submitResetPassword} className="space-y-md">
+                      <div>
+                        <label className="block font-label-md text-label-md text-on-surface mb-1" htmlFor="resetNewPassword">
+                          Kata Sandi Baru
+                        </label>
+                        <input
+                          id="resetNewPassword"
+                          type="password"
+                          required
+                          minLength={6}
+                          value={resetNewPassword}
+                          onChange={(e) => setResetNewPassword(e.target.value)}
+                          className="w-full rounded-lg border border-outline-variant bg-surface px-4 py-2.5 text-body-md focus:outline-none focus:ring-2 focus:ring-secondary"
+                          placeholder="Minimal 6 karakter"
+                          autoComplete="off"
+                        />
+                      </div>
+                      {resetError && (
+                        <p className="text-label-sm text-on-error-container bg-error-container px-3 py-2 rounded-lg">
+                          {resetError}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-3 pt-base">
+                        <button
+                          type="submit"
+                          disabled={resettingPassword}
+                          className="bg-secondary text-on-primary px-4 py-2.5 rounded-lg font-label-md hover:opacity-90 transition-all disabled:opacity-60"
+                        >
+                          {resettingPassword ? 'Menyimpan...' : 'Reset'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeResetDialog}
+                          className="px-4 py-2.5 rounded-lg border border-outline text-on-surface hover:bg-surface-container transition-all font-label-md"
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
