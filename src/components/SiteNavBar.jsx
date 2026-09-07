@@ -33,7 +33,7 @@ export default function SiteNavBar() {
   const [scrolled, setScrolled] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { pathname } = useLocation()
-  const { settings } = useSiteSettings()
+  const { settings, loading: settingsLoading } = useSiteSettings()
   const { time, date } = useClock()
 
   useEffect(() => {
@@ -66,7 +66,9 @@ export default function SiteNavBar() {
             <Icon name={sidebarOpen ? 'close' : 'menu'} className="text-[22px]" />
           </button>
           <Link to="/" className="flex items-center gap-2">
-            {settings.logo_url ? (
+            {settingsLoading ? (
+              <div className="h-8 w-8 rounded bg-surface-container-high animate-pulse" />
+            ) : settings.logo_url ? (
               <img src={settings.logo_url} alt="E-Tamu" className="h-8 w-8 rounded object-cover" />
             ) : (
               <span className="font-headline-md text-headline-md font-bold text-on-surface">
@@ -116,7 +118,9 @@ export default function SiteNavBar() {
       >
         <div className="p-6 flex flex-col gap-1">
           <div className="flex items-center gap-3">
-            {settings.logo_url ? (
+            {settingsLoading ? (
+              <div className="w-10 h-10 rounded-lg bg-surface-container-high animate-pulse" />
+            ) : settings.logo_url ? (
               <img src={settings.logo_url} alt="E-Tamu" className="w-10 h-10 rounded-lg object-cover" />
             ) : (
               <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-on-secondary">
