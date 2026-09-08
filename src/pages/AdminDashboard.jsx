@@ -39,6 +39,15 @@ function formatTime(value) {
   })
 }
 
+function formatDate(value) {
+  if (!value) return '-'
+  return new Date(value).toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  })
+}
+
 function storagePathFromUrl(url) {
   if (!url) return null
   const marker = '/site-assets/'
@@ -123,6 +132,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [employeeFilter, setEmployeeFilter] = useState('all')
+  const [dateFilterStart, setDateFilterStart] = useState('')
+  const [dateFilterEnd, setDateFilterEnd] = useState('')
   const [query, setQuery] = useState('')
   const PAGE_SIZE = 20
   const [page, setPage] = useState(1)
@@ -148,7 +159,7 @@ export default function AdminDashboard() {
     const { data, error, count } = await supabase
       .from('visits')
       .select(
-        'id, purpose, remarks, status, check_in_at, check_out_at, qr_code, destination_text, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, rank, position)',
+        'id, visitor_id, employee_id, purpose, remarks, status, check_in_at, check_out_at, qr_code, destination_text, visitors(id, full_name, phone, organization, photo_url), employees(id, full_name, rank, position)',
         { count: 'exact' }
       )
       .order('check_in_at', { ascending: false })
@@ -741,6 +752,21 @@ export default function AdminDashboard() {
 
   const filtered = visits.filter((v) => {
     if (employeeFilter !== 'all' && v.employee_id !== employeeFilter) return false
+    if (dateFilterStart || dateFilterEnd) {
+      const visitDate = new Date(v.check_in_at)
+      if (dateFilterStart) {
+        const start = new Date(dateFilterStart)
+        start.setHours(0, 0, 0, 0)
+        const startIso = new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString()
+        if (visitDate.toISOString() < startIso) return false
+      }
+      if (dateFilterEnd) {
+        const end = new Date(dateFilterEnd)
+        end.setHours(23, 59, 59, 999)
+        const endIso = new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString()
+        if (visitDate.toISOString() > endIso) return false
+      }
+    }
     if (query) {
       const q = query.toLowerCase()
       const name = v.visitors?.full_name?.toLowerCase() || ''
@@ -1180,7 +1206,7 @@ export default function AdminDashboard() {
               <h4 className="font-headline-md text-headline-md text-on-surface">
                 Pengunjung Terbaru
               </h4>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center flex-wrap">
                 <div className="relative">
                   <Icon
                     name="filter_list"
@@ -1201,6 +1227,21 @@ export default function AdminDashboard() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="date"
+                    value={dateFilterStart}
+                    onChange={(e) => { setDateFilterStart(e.target.value); setPage(1) }}
+                    className="px-2 py-1.5 bg-surface-container-low border border-outline-variant rounded-lg font-label-sm text-label-sm outline-none focus:ring-1 focus:ring-secondary"
+                  />
+                  <span className="text-on-surface-variant text-label-sm">-</span>
+                  <input
+                    type="date"
+                    value={dateFilterEnd}
+                    onChange={(e) => { setDateFilterEnd(e.target.value); setPage(1) }}
+                    className="px-2 py-1.5 bg-surface-container-low border border-outline-variant rounded-lg font-label-sm text-label-sm outline-none focus:ring-1 focus:ring-secondary"
+                  />
                 </div>
               </div>
             </div>
@@ -1225,6 +1266,9 @@ export default function AdminDashboard() {
                       Catatan
                     </th>
                     <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">
+                      Tanggal
+                    </th>
+                    <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest">
                       Waktu Masuk
                     </th>
                     <th className="px-6 py-4 font-label-sm text-label-sm text-secondary uppercase tracking-widest text-right">
@@ -1235,7 +1279,7 @@ export default function AdminDashboard() {
                 <tbody className="divide-y divide-outline-variant/50">
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="px-6 py-8 text-center text-on-surface-variant">
+                      <td colSpan={9} className="px-6 py-8 text-center text-on-surface-variant">
                         Belum ada data kunjungan.
                       </td>
                     </tr>
@@ -1288,7 +1332,10 @@ export default function AdminDashboard() {
                       <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant max-w-xs truncate">
                         {v.remarks || '-'}
                       </td>
-                      <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">
+                      <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant whitespace-nowrap">
+                        {formatDate(v.check_in_at)}
+                      </td>
+                      <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant whitespace-nowrap">
                         {formatTime(v.check_in_at)}
                       </td>
                       <td className="px-6 py-4 text-right">
