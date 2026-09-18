@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../hooks/useAuth.js'
@@ -126,6 +126,14 @@ export default function AdminDashboard() {
     setTab(t)
     setSidebarOpen(false)
   }
+
+  // Clear search results when tab changes
+  useEffect(() => {
+    setSearchResults([])
+    setSearchQuery('')
+    setQuery('')
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+  }, [tab])
   const [settingsLocal, setSettingsLocal] = useState(settings)
   const [savingSettings, setSavingSettings] = useState(false)
   const [visits, setVisits] = useState([])
@@ -135,6 +143,10 @@ export default function AdminDashboard() {
   const [dateFilterStart, setDateFilterStart] = useState('')
   const [dateFilterEnd, setDateFilterEnd] = useState('')
   const [query, setQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState('') // debounced server search query
+  const [searchResults, setSearchResults] = useState([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const searchDebounceRef = useRef(null)
   const PAGE_SIZE = 20
   const [page, setPage] = useState(1)
   const pageRef = useRef(page)
@@ -181,6 +193,40 @@ export default function AdminDashboard() {
       mountedRef.current = true
       setLoading(false)
     }
+  }
+
+  // Debounced server-side search
+  const performSearch = useCallback(async (q) => {
+    if (!q.trim()) {
+      setSearchResults([])
+      setSearchQuery('')
+      return
+    }
+    setSearchLoading(true)
+    try {
+      const { data, error } = await supabase.rpc('search_global', {
+        p_query: q.trim(),
+        p_tab: tab,
+        p_limit: 50,
+        p_offset: 0
+      })
+      if (error) throw error
+      setSearchResults(data || [])
+      setSearchQuery(q.trim())
+    } catch (err) {
+      console.error('Search error:', err)
+      setSearchResults([])
+    } finally {
+      setSearchLoading(false)
+    }
+  }, [tab])
+
+  const handleSearchChange = (value) => {
+    setQuery(value) // keep for local filter fallback
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = setTimeout(() => {
+      performSearch(value)
+    }, 300)
   }
 
   const totalPages = Math.max(1, Math.ceil(totalVisits / PAGE_SIZE))
@@ -767,7 +813,7 @@ export default function AdminDashboard() {
         if (visitDate.toISOString() > endIso) return false
       }
     }
-    if (query) {
+    if (query && !searchQuery) {
       const q = query.toLowerCase()
       const name = v.visitors?.full_name?.toLowerCase() || ''
       const org = v.visitors?.organization?.toLowerCase() || ''
@@ -777,6 +823,66 @@ export default function AdminDashboard() {
     }
     return true
   })
+
+  // Server-side search results take precedence over local filtering
+  const searchVisitIds = useMemo(() => new Set(searchResults.filter(r => r.type === 'visit').map(r => r.id)), [searchResults])
+  const searchEmployeeIds = useMemo(() => new Set(searchResults.filter(r => r.type === 'employee').map(r => r.id)), [searchResults])
+  const searchAdminIds = useMemo(() => new Set(searchResults.filter(r => r.type === 'admin').map(r => r.id)), [searchResults])
+  const searchLogIds = useMemo(() => new Set(searchResults.filter(r => r.type === 'log').map(r => r.id)), [searchResults])
+
+  // For dasbor tab: use server search results when searching
+  const filteredVisits = useMemo(() => {
+    if (searchQuery && tab === 'dasbor') {
+      const ids = searchVisitIds
+      return visits.filter(v => ids.has(v.id))
+    }
+    return filtered
+  }, [filtered, searchQuery, searchVisitIds, tab])
+
+  const filteredEmployees = useMemo(() => {
+    if (searchQuery) {
+      // Use server search results for employees
+      const ids = searchEmployeeIds
+      return employees.filter(e => ids.has(e.id))
+    }
+    if (!query) return employees
+    const q = query.toLowerCase()
+    return employees.filter((e) =>
+      (e.full_name || '').toLowerCase().includes(q) ||
+      (e.rank || '').toLowerCase().includes(q) ||
+      (e.position || '').toLowerCase().includes(q)
+    )
+  }, [employees, query, searchQuery, searchEmployeeIds])
+
+  const filteredAdmins = useMemo(() => {
+    if (searchQuery) {
+      const ids = searchAdminIds
+      return admins.filter(a => ids.has(a.id))
+    }
+    if (!query) return admins
+    const q = query.toLowerCase()
+    return admins.filter((a) =>
+      (a.full_name || '').toLowerCase().includes(q) ||
+      (a.email || '').toLowerCase().includes(q) ||
+      (a.role || '').toLowerCase().includes(q)
+    )
+  }, [admins, query, searchQuery, searchAdminIds])
+
+  const filteredLogs = useMemo(() => {
+    let base = logOnlyMine ? logs.filter((l) => l.admin_id === profile?.id) : logs
+    if (searchQuery) {
+      const ids = searchLogIds
+      return base.filter(l => ids.has(l.id))
+    }
+    if (!query) return base
+    const q = query.toLowerCase()
+    return base.filter((l) =>
+      (l.admin_name || '').toLowerCase().includes(q) ||
+      (l.action || '').toLowerCase().includes(q) ||
+      (l.target_name || '').toLowerCase().includes(q) ||
+      (l.detail || '').toLowerCase().includes(q)
+    )
+  }, [logs, logOnlyMine, profile?.id, query, searchQuery, searchLogIds])
 
   if (authLoading || (!profile && session)) {
     return (
@@ -973,13 +1079,25 @@ export default function AdminDashboard() {
                 <input
                   value={query}
                   onChange={(e) => {
-                    setQuery(e.target.value)
+                    handleSearchChange(e.target.value)
                     setPage(1)
                   }}
                   className="w-full pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-full font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 outline-none"
-                  placeholder="Cari pengunjung, log, atau kode..."
+                  placeholder={
+                    tab === 'dasbor' ? 'Cari pengunjung, organisasi, telepon, tujuan...' :
+                    tab === 'pegawai' ? 'Cari nama, pangkat, jabatan...' :
+                    tab === 'admin' ? 'Cari nama, email, peran...' :
+                    tab === 'log' ? 'Cari admin, aksi, target, detail...' :
+                    'Cari...'
+                  }
                   type="text"
                 />
+                {searchLoading && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-on-surface-variant text-xs">
+                    <div className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+                    <span>Mencari...</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3 border-l border-outline-variant pl-4">
@@ -1277,14 +1395,14 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/50">
-                  {filtered.length === 0 && (
+                  {filteredVisits.length === 0 && (
                     <tr>
                       <td colSpan={9} className="px-6 py-8 text-center text-on-surface-variant">
                         Belum ada data kunjungan.
                       </td>
                     </tr>
                   )}
-                  {filtered.map((v) => (
+                  {filteredVisits.map((v) => (
                     <tr key={v.id} className="hover:bg-surface-container-low transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -1460,7 +1578,7 @@ export default function AdminDashboard() {
               <div className="glass-card rounded-xl overflow-hidden shadow-sm">
                 <div className="px-6 py-4 border-b border-outline-variant">
                   <h4 className="font-headline-md text-headline-md text-on-surface">
-                    Daftar Pegawai ({employees.length})
+                    Daftar Pegawai ({filteredEmployees.length})
                   </h4>
                 </div>
                 <div className="overflow-x-auto">
@@ -1474,14 +1592,14 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/50">
-                      {employees.length === 0 && (
+                      {filteredEmployees.length === 0 && (
                         <tr>
                           <td colSpan={4} className="px-6 py-8 text-center text-on-surface-variant">
                             Belum ada data pegawai.
                           </td>
                         </tr>
                       )}
-                      {employees
+                      {filteredEmployees
                         .slice((empPage - 1) * EMP_PAGE_SIZE, empPage * EMP_PAGE_SIZE)
                         .map((emp) => (
                         <tr key={emp.id} className="hover:bg-surface-container-low transition-colors">
@@ -1529,7 +1647,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="px-6 py-4 border-t border-outline-variant flex items-center justify-between">
                   <p className="font-label-sm text-label-sm text-on-surface-variant">
-                    Halaman {empPage} dari {Math.max(1, Math.ceil(employees.length / EMP_PAGE_SIZE))}
+                    Halaman {empPage} dari {Math.max(1, Math.ceil(filteredEmployees.length / EMP_PAGE_SIZE))}
                   </p>
                   <div className="flex items-center gap-2">
                     <button
@@ -1540,8 +1658,8 @@ export default function AdminDashboard() {
                       Sebelumnya
                     </button>
                     <button
-                      onClick={() => setEmpPage((p) => Math.min(Math.ceil(employees.length / EMP_PAGE_SIZE), p + 1))}
-                      disabled={empPage >= Math.ceil(employees.length / EMP_PAGE_SIZE)}
+                      onClick={() => setEmpPage((p) => Math.min(Math.ceil(filteredEmployees.length / EMP_PAGE_SIZE), p + 1))}
+                      disabled={empPage >= Math.ceil(filteredEmployees.length / EMP_PAGE_SIZE)}
                       className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface font-label-md hover:bg-surface-container-high transition-all disabled:opacity-50"
                     >
                       Berikutnya
@@ -1628,7 +1746,7 @@ export default function AdminDashboard() {
               <div className="glass-card rounded-xl overflow-hidden shadow-sm">
                 <div className="px-6 py-4 border-b border-outline-variant">
                   <h4 className="font-headline-md text-headline-md text-on-surface">
-                    Daftar Pengguna ({admins.length})
+                    Daftar Pengguna ({filteredAdmins.length})
                   </h4>
                 </div>
                 <div className="overflow-x-auto">
@@ -1642,14 +1760,14 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/50">
-                      {admins.length === 0 && (
+                      {filteredAdmins.length === 0 && (
                         <tr>
                           <td colSpan={4} className="px-6 py-8 text-center text-on-surface-variant">
                             Belum ada data admin.
                           </td>
                         </tr>
                       )}
-                      {admins.map((a) => (
+                      {filteredAdmins.map((a) => (
                         <tr key={a.id} className="hover:bg-surface-container-low transition-colors">
                           <td className="px-6 py-4 font-label-md text-label-md font-bold text-on-surface">
                             {a.full_name || '-'}
@@ -1781,9 +1899,7 @@ export default function AdminDashboard() {
                     </thead>
                     <tbody className="divide-y divide-outline-variant/50">
                       {(() => {
-                        const filtered = logOnlyMine
-                          ? logs.filter((l) => l.admin_id === profile?.id)
-                          : logs
+                        const filtered = filteredLogs
                         if (filtered.length === 0) {
                           return (
                             <tr>
