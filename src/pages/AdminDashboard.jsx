@@ -23,8 +23,20 @@ const PURPOSE_LABELS = {
   maintenance: 'Pemeliharaan / Dukungan',
   personal: 'Kunjungan Pribadi',
   interview: 'Wawancara Kerja',
-  trial: 'Persidangan'
+  trial: 'Persidangan',
+  other: 'Lainnya'
 }
+
+const PURPOSE_OPTIONS = [
+  { value: 'business', label: 'Pertemuan Kemitraan atau pihak ketiga' },
+  { value: 'delivery', label: 'Pengiriman Berkas Perkara' },
+  { value: 'trial', label: 'Persidangan' },
+  { value: 'letter_delivery', label: 'Pengiriman Surat' },
+  { value: 'maintenance', label: 'Pemeliharaan / Dukungan' },
+  { value: 'personal', label: 'Kunjungan Pribadi' },
+  { value: 'interview', label: 'Wawancara Kerja' },
+  { value: 'other', label: 'Lainnya' }
+]
 
 function purposeLabel(value) {
   if (!value) return '-'
@@ -46,6 +58,18 @@ function formatDate(value) {
     month: 'long',
     year: 'numeric'
   })
+}
+
+function describeError(error, fallback) {
+  if (!error) return fallback
+  return [
+    error.message || fallback,
+    error.code ? `[code: ${error.code}]` : '',
+    error.details ? `[details: ${error.details}]` : '',
+    error.hint ? `[hint: ${error.hint}]` : ''
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 function storagePathFromUrl(url) {
@@ -664,21 +688,31 @@ export default function AdminDashboard() {
     e.preventDefault()
     setSaving(true)
     try {
-      const { error: vErr } = await supabase
-        .from('visitors')
-        .update({ full_name: editForm.fullName, phone: editForm.phone })
-        .eq('id', editing.visitor_id)
-      if (vErr) throw vErr
+      const [visitorRes, visitRes] = await Promise.all([
+        supabase
+          .from('visitors')
+          .update({ full_name: editForm.fullName, phone: editForm.phone })
+          .eq('id', editing.visitor_id),
+        supabase
+          .from('visits')
+          .update({
+            employee_id: editForm.employeeId || null,
+            purpose: editForm.purpose,
+            remarks: editForm.remarks || null
+          })
+          .eq('id', editing.id)
+      ])
 
-      const { error: visitErr } = await supabase
-        .from('visits')
-        .update({
-          employee_id: editForm.employeeId || null,
-          purpose: editForm.purpose,
-          remarks: editForm.remarks || null
-        })
-        .eq('id', editing.id)
-      if (visitErr) throw visitErr
+      if (visitorRes.error || visitRes.error) {
+        const messages = []
+        if (visitorRes.error) {
+          messages.push(`Data pengunjung: ${describeError(visitorRes.error, 'gagal disimpan.')}`)
+        }
+        if (visitRes.error) {
+          messages.push(`Data kunjungan: ${describeError(visitRes.error, 'gagal disimpan.')}`)
+        }
+        throw new Error(messages.join(' | '))
+      }
 
       closeEdit()
       loadVisits()
@@ -707,13 +741,7 @@ export default function AdminDashboard() {
     try {
       const { error } = await supabase.from('visits').delete().eq('id', id)
       if (error) {
-        const detail = [
-          error.message || 'Gagal menghapus data.',
-          error.code ? `[code: ${error.code}]` : '',
-          error.details ? `[details: ${error.details}]` : '',
-          error.hint ? `[hint: ${error.hint}]` : ''
-        ].filter(Boolean).join(' ')
-        throw new Error(detail)
+        throw new Error(describeError(error, 'Gagal menghapus data.'))
       }
       loadVisits()
       loadChart()
@@ -2059,6 +2087,10 @@ export default function AdminDashboard() {
                   <option value="personal">Kunjungan Pribadi</option>
                   <option value="interview">Wawancara Kerja</option>
                   <option value="other">Lainnya</option>
+                  {editForm.purpose &&
+                    !PURPOSE_OPTIONS.some((o) => o.value === editForm.purpose) && (
+                      <option value={editForm.purpose}>{editForm.purpose}</option>
+                    )}
                 </select>
               </div>
               <div>

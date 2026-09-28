@@ -106,7 +106,8 @@ Autentikasi berbasis Supabase Auth dengan role `admin` dan `staff`. Super Admin 
    ```
 
 4. **Setup Database (Supabase)**
-    - Jalankan migrasi di folder `supabase/migrations/` berurutan (0001_init.sql sampai 0026_search_rpc.sql)
+     - Jalankan migrasi di folder `supabase/migrations/` berurutan (0001_init.sql sampai 0027_fix_visitors_update_policy.sql)
+     - Jika fitur Edit Data Kunjungan gagal disimpan dengan pesan `row-level security`, jalankan ulang `0027_fix_visitors_update_policy.sql` (script aman diulang)
     - Buat bucket Storage bernama `site-assets` dengan policy public read
     - Aktifkan Realtime pada tabel `visits` dan `activity_logs`
 
@@ -156,7 +157,7 @@ E-Tamu/
 ├── supabase/
 │   ├── functions/
 │   │   └── invite-admin/           # Edge Function invite admin (opsional)
-│   └── migrations/                 # 26 file migrasi SQL (0001_init.sql sampai 0026_search_rpc.sql)
+│       └── migrations/                 # 27 file migrasi SQL (0001_init.sql sampai 0027_fix_visitors_update_policy.sql)
 ├── .env                            # Environment variables (tidak di-commit)
 ├── .gitignore
 ├── index.html
