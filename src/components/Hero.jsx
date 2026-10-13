@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from './Icon.jsx'
-import { useSiteSettings } from '../hooks/useSiteSettings.js'
+import { useSiteSettings } from '../context/SiteSettingsContext.jsx'
 import { supabase } from '../lib/supabase.js'
 
 const HERO_IMAGE =
@@ -9,13 +9,7 @@ const HERO_IMAGE =
 
 export default function Hero() {
   const { settings, loading } = useSiteSettings()
-  const [bgUrl, setBgUrl] = useState(HERO_IMAGE)
-
-  useEffect(() => {
-    if (!loading && settings.hero_bg_url) setBgUrl(settings.hero_bg_url)
-  }, [loading, settings.hero_bg_url])
-
-  const bg = bgUrl
+  const bg = settings.hero_bg_url || HERO_IMAGE
 
   const [now, setNow] = useState(new Date())
   const [visitorCount, setVisitorCount] = useState(0)

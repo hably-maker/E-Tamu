@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 
 const DEFAULTS = {
@@ -9,7 +9,11 @@ const DEFAULTS = {
   ticker_items: []
 }
 
-export function useSiteSettings() {
+const SiteSettingsContext = createContext(null)
+
+// Satu instance untuk seluruh aplikasi: 1 request + 1 channel realtime,
+// bukan satu per komponen yang memakai pengaturan.
+export function SiteSettingsProvider({ children }) {
   const [settings, setSettings] = useState(DEFAULTS)
   const [loading, setLoading] = useState(true)
 
@@ -52,6 +56,17 @@ export function useSiteSettings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return { settings, loading, reload: load }
+  const value = useMemo(() => ({ settings, loading, reload: load }), [settings, loading])
+
+  return (
+    <SiteSettingsContext.Provider value={value}>{children}</SiteSettingsContext.Provider>
+  )
 }
 
+export function useSiteSettings() {
+  const ctx = useContext(SiteSettingsContext)
+  if (!ctx) {
+    throw new Error('useSiteSettings() harus dipakai di dalam <SiteSettingsProvider>')
+  }
+  return ctx
+}

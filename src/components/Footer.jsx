@@ -1,5 +1,3 @@
-import { Link } from 'react-router-dom'
-
 export default function Footer() {
   return (
     <footer className="w-full py-6 px-6 md:px-8 flex flex-col md:flex-row justify-between items-center gap-md bg-inverse-surface border-t border-outline">

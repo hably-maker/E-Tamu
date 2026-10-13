@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
-import { useAuth } from '../hooks/useAuth.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import Icon from '../components/Icon.jsx'
 
 export default function AdminProfile() {
-  const { session, profile, isSuperAdmin, signOut } = useAuth()
+  const { session, profile, isSuperAdmin, signOut, refreshProfile } = useAuth()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const force = searchParams.get('force') === '1'
@@ -53,6 +53,10 @@ export default function AdminProfile() {
         .update({ must_change_password: false })
         .eq('id', session.user.id)
       if (profErr) throw profErr
+
+      // Segarkan profile di AuthContext, jika tidak must_change_password
+      // masih true dan ProtectedRoute akan mengunci halaman lagi.
+      await refreshProfile()
 
       setSuccess('Kata sandi berhasil diperbarui.')
       setOldPassword('')

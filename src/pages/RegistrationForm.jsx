@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import Icon from '../components/Icon.jsx'
-import SiteNavBar from '../components/SiteNavBar.jsx'
-import { useSiteSettings } from '../hooks/useSiteSettings.js'
+import { useSiteSettings } from '../context/SiteSettingsContext.jsx'
 
 const PURPOSE_OPTIONS = [
   { value: 'delivery', label: 'Pengiriman Berkas Perkara' },
@@ -24,7 +23,6 @@ export default function RegistrationForm() {
   const [form, setForm] = useState({
     fullName: '',
     phoneNumber: '',
-    employeeId: '',
     purpose: '',
     otherPurpose: '',
     remarks: ''
@@ -96,7 +94,7 @@ export default function RegistrationForm() {
     const load = async () => {
       const { data } = await supabase
         .from('employees')
-        .select('id, full_name, position')
+        .select('id, full_name, rank, position')
         .order('full_name')
       if (data) setEmployees(data)
     }
@@ -110,20 +108,18 @@ export default function RegistrationForm() {
     setError('')
     setSubmitting(true)
     try {
-      const { data: visitorId, error: vErr } = await supabase
-        .rpc('register_visitor', { p_full_name: form.fullName, p_phone: form.phoneNumber })
-      if (vErr) throw vErr
-
-      const { error: visitErr } = await supabase.from('visits').insert({
-        visitor_id: visitorId,
-        employee_id: destEmployeeId || null,
-        destination_text: destOther ? destOtherText.trim() || null : null,
-        purpose: form.purpose === 'other' ? form.otherPurpose : form.purpose,
-        remarks: form.remarks || null
+      // Satu RPC: insert visitor + insert visit dalam satu transaksi
+      const { error } = await supabase.rpc('create_visit', {
+        p_full_name: form.fullName.trim(),
+        p_phone: form.phoneNumber.trim() || null,
+        p_employee_id: destEmployeeId || null,
+        p_destination_text: destOther ? destOtherText.trim() || null : null,
+        p_purpose: form.purpose === 'other' ? form.otherPurpose.trim() : form.purpose,
+        p_remarks: form.remarks.trim() || null
       })
-      if (visitErr) throw visitErr
+      if (error) throw error
 
-      setForm({ fullName: '', phoneNumber: '', employeeId: '', purpose: '', otherPurpose: '', remarks: '' })
+      setForm({ fullName: '', phoneNumber: '', purpose: '', otherPurpose: '', remarks: '' })
       setDestInput('')
       setDestEmployeeId(null)
       setDestOther(false)
@@ -145,9 +141,7 @@ export default function RegistrationForm() {
 
   return (
     <div className="bg-surface text-on-surface min-h-screen flex flex-col">
-      <SiteNavBar />
-
-      <main className="pt-32 pb-xl px-margin-mobile md:px-margin-desktop bg-surface">
+      <main className="pt-24 pb-xl px-margin-mobile md:px-margin-desktop bg-surface">
         <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-gutter">
           {/* Left: context image */}
           <div className="lg:col-span-5 hidden lg:flex flex-col justify-center">

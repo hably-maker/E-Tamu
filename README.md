@@ -106,10 +106,15 @@ Autentikasi berbasis Supabase Auth dengan role `admin` dan `staff`. Super Admin 
    ```
 
 4. **Setup Database (Supabase)**
-     - Jalankan migrasi di folder `supabase/migrations/` berurutan (0001_init.sql sampai 0027_fix_visitors_update_policy.sql)
+     - Jalankan migrasi di folder `supabase/migrations/` berurutan (0001_init.sql sampai 0031_admin_visits_page_rpc.sql)
+     - Sudah pernah sampai 0026? Cukup jalankan sekali file gabungan `supabase/pending_0028-0031.sql` (gabungan 0028–0031, idempotent)
      - Jika fitur Edit Data Kunjungan gagal disimpan dengan pesan `row-level security`, jalankan ulang `0027_fix_visitors_update_policy.sql` (script aman diulang)
-    - Buat bucket Storage bernama `site-assets` dengan policy public read
-    - Aktifkan Realtime pada tabel `visits` dan `activity_logs`
+     - `0028_lock_site_assets_storage.sql` wajib: tanpa itu siapa pun bisa mengunggah/menghapus aset (logo, background, favicon)
+     - `0029_visit_stats_rpc.sql` wajib: tanpa itu grafik dasbor kosong
+     - `0030_create_visit_rpc.sql` wajib: registrasi pengunjung memakai RPC `create_visit`; policy insert publik sudah dihapus
+     - `0031_admin_visits_page_rpc.sql` wajib: tabel dasbor (filter, pencarian, paginasi, kartu ringkasan) memakai RPC `admin_visits_page`
+     - Bucket Storage `site-assets` harus public (hanya read publik, tulis/hapus admin)
+     - Aktifkan Realtime pada tabel `visits` dan `activity_logs`
 
 5. **Jalankan Development Server**
    ```bash
@@ -122,6 +127,18 @@ Autentikasi berbasis Supabase Auth dengan role `admin` dan `staff`. Super Admin 
    npm run build
    ```
    Output di folder `dist/`, siap deploy ke Vercel, Netlify, atau static hosting lain.
+   Route admin dimuat lewat `React.lazy`, jadi pengunjung umum tidak mengunduh
+   bundel dasbor.
+
+## Catatan Penting
+
+- **Rute `/tv`** (tampilan TV resepsionis) berada di dalam `ProtectedRoute` dan
+  memakai RPC `admin_visits_page` (butuh migration 0031), karena tabel `visits`
+  hanya bisa dibaca oleh admin. TV harus dijaga dengan sesi admin yang sudah login.
+- **Angka "Pengunjung Hari Ini" di beranda masih kosong** untuk pengunjung
+  anon: `visits` dilindungi RLS admin-only sehingga `count` selalu 0. Jika
+  ingin angka publik, tambahkan RPC agregat yang hanya mengembalikan jumlah
+  (tanpa nama pengunjung) — belum disediakan demi menjaga privasi data.
 
 ## Struktur Folder
 
@@ -131,33 +148,47 @@ E-Tamu/
 │   └── favicon.svg
 ├── src/
 │   ├── components/
+│   │   ├── admin/
+│   │   │   ├── ActivityLogTab.jsx     # Tab log aktivitas
+│   │   │   ├── AdminSidebar.jsx       # Sidebar + navigasi tab
+│   │   │   ├── AdminTopbar.jsx        # Topbar + pencarian global
+│   │   │   ├── AdminsTab.jsx          # Tab kelola admin + reset password
+│   │   │   ├── DashboardTab.jsx       # Komposisi tab dasbor
+│   │   │   ├── EditEmployeeModal.jsx  # Modal edit pegawai
+│   │   │   ├── EditVisitModal.jsx     # Modal edit kunjungan
+│   │   │   ├── EmployeesTab.jsx       # Tab data pegawai
+│   │   │   ├── ExportToolbar.jsx      # Toolbar export CSV/Excel/PDF
+│   │   │   ├── SettingsTab.jsx        # Tab pengaturan gambar situs
+│   │   │   ├── SummaryCards.jsx       # Kartu ringkasan kunjungan
+│   │   │   ├── VisitChart.jsx         # Grafik harian/mingguan/bulanan
+│   │   │   └── VisitorsTable.jsx      # Tabel pengunjung + filter + paginasi
 │   │   ├── FaviconManager.jsx      # Dynamic favicon dari site_settings
-│   │   ├── FeaturesGrid.jsx        # Placeholder fitur (unused)
 │   │   ├── Footer.jsx              # Footer publik
 │   │   ├── Hero.jsx                # Hero section beranda
 │   │   ├── Icon.jsx                # Wrapper Material Symbols
 │   │   ├── ProtectedRoute.jsx      # Guard rute admin
 │   │   └── SiteNavBar.jsx          # Navbar publik
-│   ├── hooks/
-│   │   ├── useAuth.jsx             # Auth state + profile + role
-│   │   └── useSiteSettings.jsx     # Site settings (reactive via realtime)
+│   ├── context/
+│   │   ├── AuthContext.jsx         # Provider auth (session, profile, role)
+│   │   └── SiteSettingsContext.jsx  # Provider site settings (1 request + 1 channel)
 │   ├── lib/
 │   │   ├── activityLog.js          # Insert ke activity_logs
 │   │   ├── export.js               # CSV/Excel/PDF export (code-split)
-│   │   └── supabase.js             # Supabase client + custom storage
+│   │   ├── supabase.js             # Supabase client + custom storage
+│   │   └── visitFormat.js          # Label keperluan + format tanggal/waktu
 │   ├── pages/
-│   │   ├── AdminDashboard.jsx      # Panel admin utama (2000+ baris)
+│   │   ├── AdminDashboard.jsx      # Panel admin (logika data; JSX per tab di components/admin)
 │   │   ├── AdminLogin.jsx          # Login admin
 │   │   ├── AdminProfile.jsx        # Profil & ganti password
 │   │   ├── RegistrationForm.jsx    # Form registrasi pengunjung
-│   │   └── TvDisplay.jsx           # Tampilan TV resepsionis
+│   │   └── TvDisplay.jsx           # Tampilan TV resepsionis (rute /tv)
 │   ├── App.jsx                     # Routing + layout
 │   ├── index.css                   # Tailwind + custom theme (CSS variables)
 │   └── main.jsx                    # Entry point
 ├── supabase/
 │   ├── functions/
 │   │   └── invite-admin/           # Edge Function invite admin (opsional)
-│       └── migrations/                 # 27 file migrasi SQL (0001_init.sql sampai 0027_fix_visitors_update_policy.sql)
+│   └── migrations/                 # 31 file migrasi SQL (0001_init.sql sampai 0031_admin_visits_page_rpc.sql)
 ├── .env                            # Environment variables (tidak di-commit)
 ├── .gitignore
 ├── index.html

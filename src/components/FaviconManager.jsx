@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useSiteSettings } from '../hooks/useSiteSettings.js'
+import { useSiteSettings } from '../context/SiteSettingsContext.jsx'
 
 export default function FaviconManager() {
   const { settings, loading } = useSiteSettings()

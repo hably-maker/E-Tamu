@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
+import { useSiteSettings } from '../context/SiteSettingsContext.jsx'
 import Icon from '../components/Icon.jsx'
 
 const TICKER_ITEMS = [
@@ -44,6 +45,15 @@ export default function TvDisplay() {
   const [clock, setClock] = useState(() => formatClock(new Date()))
   const [date, setDate] = useState(() => formatDate(new Date()))
   const [visits, setVisits] = useState([])
+  const { settings } = useSiteSettings()
+
+  // Teks pengumuman: pakai site_settings.ticker_items (text[]) bila diisi
+  const tickerItems = useMemo(() => {
+    const fromSettings = (settings.ticker_items || [])
+      .filter((t) => typeof t === 'string' && t.trim())
+      .map((t) => ({ icon: 'campaign', text: t }))
+    return fromSettings.length ? fromSettings : TICKER_ITEMS
+  }, [settings.ticker_items])
 
   // Live clock
   useEffect(() => {
@@ -55,18 +65,25 @@ export default function TvDisplay() {
     return () => clearInterval(id)
   }, [])
 
-  // Live visitors (recent check-ins)
+  // Live visitors (recent check-ins) via RPC admin_visits_page (migration 0031)
+  // Query langsung ke tabel visits tidak bisa dipakai di sini karena RLS
+  // hanya mengizinkan admin.
+  const [todayTotal, setTodayTotal] = useState(0)
+  const [loadError, setLoadError] = useState('')
   useEffect(() => {
     const load = async () => {
-      const { data, error } = await supabase
-        .from('visits')
-        .select(
-          'id, check_in_at, visitors(id, full_name), employees(id, full_name, position), departments(id, name)'
-        )
-        .order('check_in_at', { ascending: false })
-        .limit(12)
-      if (!error) setVisits(data || [])
-      else console.error('TvDisplay load error:', error)
+      const { data, error } = await supabase.rpc('admin_visits_page', {
+        p_page: 1,
+        p_page_size: 12,
+        p_tz_offset_minutes: -new Date().getTimezoneOffset()
+      })
+      if (error) {
+        setLoadError(error.message)
+        return
+      }
+      setLoadError('')
+      setVisits(data?.rows || [])
+      setTodayTotal(Number(data?.today) || 0)
     }
     load()
 
@@ -80,12 +97,6 @@ export default function TvDisplay() {
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [])
-
-  const todayCount = visits.filter((v) => {
-    const d = new Date(v.check_in_at)
-    const now = new Date()
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
-  }).length
 
   return (
     <div className="bg-primary-container text-on-primary-fixed overflow-hidden h-screen flex flex-col font-body-md">
@@ -140,7 +151,9 @@ export default function TvDisplay() {
                 {visits.length === 0 && (
                   <tr>
                     <td colSpan={3} className="p-md text-center text-on-primary-container">
-                      Belum ada kunjungan hari ini.
+                      {loadError
+                        ? 'Data tidak dapat dimuat. Jalankan migration 0031_admin_visits_page_rpc.sql.'
+                        : 'Belum ada kunjungan.'}
                     </td>
                   </tr>
                 )}
@@ -155,7 +168,7 @@ export default function TvDisplay() {
                       </div>
                     </td>
                     <td className="p-md font-body-lg text-on-primary-container">
-                      {v.employees?.full_name || v.departments?.name || 'Lobi'}
+                      {v.employees?.full_name || v.destination_text || 'Lobi'}
                     </td>
                     <td className="p-md font-headline-md text-secondary text-right font-mono">
                       {formatArrival(v.check_in_at)}
@@ -178,7 +191,7 @@ export default function TvDisplay() {
             </div>
             <div className="mt-auto">
               <div className="font-headline-xl text-[84px] text-on-primary font-extrabold leading-none">
-                {todayCount}
+                {todayTotal}
               </div>
               <div className="flex items-center gap-xs text-secondary mt-sm">
                 <Icon name="trending_up" className="text-sm" />
@@ -219,7 +232,7 @@ export default function TvDisplay() {
         </div>
         <div className="flex-1 relative overflow-hidden h-full flex items-center">
           <div className="ticker-animation whitespace-nowrap flex gap-xl items-center text-on-primary font-body-lg text-lg">
-            {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
+                {[...tickerItems, ...tickerItems].map((item, i) => (
               <span key={i} className="flex items-center gap-sm">
                 <Icon name={item.icon} className="text-secondary" />
                 {item.text}

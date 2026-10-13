@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { useSiteSettings } from '../hooks/useSiteSettings.js'
+import { useSiteSettings } from '../context/SiteSettingsContext.jsx'
 import Icon from './Icon.jsx'
 
 const navLinks = [
@@ -8,33 +8,11 @@ const navLinks = [
   { label: 'Pengunjung', to: '/pengunjung' }
 ]
 
-function useClock() {
-  const [now, setNow] = useState(new Date())
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(id)
-  }, [])
-
-  const time = now.toLocaleTimeString('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
-  const date = now.toLocaleDateString('id-ID', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  })
-  return { time, date }
-}
-
 export default function SiteNavBar() {
   const [scrolled, setScrolled] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { pathname } = useLocation()
   const { settings, loading: settingsLoading } = useSiteSettings()
-  const { time, date } = useClock()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
