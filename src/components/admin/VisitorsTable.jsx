@@ -122,7 +122,7 @@ export default function VisitorsTable({
                 <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">
                   {v.visitors?.phone || '-'}
                 </td>
-                <td className="px-6 py-4 align-top min-w-[180px]">
+                <td className="px-6 py-4 align-top min-w-[180px]" title={v.employees?.full_name || v.destination_text || 'Lobi'}>
                   <div className="flex flex-col gap-0.5">
                     <span className="font-label-md text-label-md text-on-surface font-bold whitespace-nowrap">
                       {v.employees?.full_name || v.destination_text || 'Lobi'}
@@ -145,7 +145,7 @@ export default function VisitorsTable({
                 <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant">
                   {purposeLabel(v.purpose)}
                 </td>
-                <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant max-w-xs truncate">
+                <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant max-w-xs truncate" title={v.remarks || '-'}>
                   {v.remarks || '-'}
                 </td>
                 <td className="px-6 py-4 font-body-md text-body-md text-on-surface-variant whitespace-nowrap">
